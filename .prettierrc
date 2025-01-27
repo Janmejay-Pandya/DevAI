@@ -1,0 +1,17 @@
+{
+  "semi": true,
+  "tabWidth": 2,
+  "printWidth": 100,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "jsxSingleQuote": true,
+  "bracketSpacing": true,
+  "overrides": [
+    {
+      "files": "*.py",
+      "options": {
+        "tabWidth": 4
+      }
+    }
+  ]
+}
