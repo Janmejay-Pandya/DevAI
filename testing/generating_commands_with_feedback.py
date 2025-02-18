@@ -1,17 +1,28 @@
 import json
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from langgraph.graph import StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
+from langchain_google_genai import ChatGoogleGenerativeAI
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY")
 
 # Initialize the LLM
-llm = ChatGroq(model="llama3-70b-8192", temperature=0.0, max_retries=2, verbose=True)
+llm = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",
+    temperature=0,
+    max_tokens=None,
+    timeout=None,
+    max_retries=2,
+)
 
 
-# --- Step 1: Define Input Data Model ---
 class Step(BaseModel):
     step: int
     command: str
@@ -22,7 +33,6 @@ class InstructionOutput(BaseModel):
     steps: List[Step]
 
 
-# --- Step 2: Define LLM for Instruction Generation ---
 instruction_prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -33,6 +43,9 @@ instruction_prompt = ChatPromptTemplate.from_messages(
                 Make sure the commands are complete, error-free, and well-structured.
                 These commands will be actually be implemented by an autonomous agent.
                 so make sure each and every minute details is included and you are not making any mistake:
+                
+                {previous_feedback}
+
                 {{
                     "steps": [{{
                         "step": "1",
@@ -51,15 +64,16 @@ instruction_prompt = ChatPromptTemplate.from_messages(
 instruction_parser = JsonOutputParser(pydantic_object=InstructionOutput)
 instruction_chain = instruction_prompt | llm | instruction_parser
 
-# --- Step 3: Define LLM for Feedback & Approval ---
+
 review_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
             """You are an expert engineer who reviews step-by-step guides for correctness.
-                  If everything is correct, respond with "approved".
+                  If everything is correct, respond with {{"feedback": "approved"}}.
                   Otherwise, point out any mistakes in JSON format: 
-                  {{"feedback": "Your mistake description here"}} """,
+                  {{"feedback": "Your mistakes description here"}}
+                  Reply with only JSON and nothing else""",
         ),
         ("user", "Review the following steps: {steps}"),
     ]
@@ -68,34 +82,39 @@ review_prompt = ChatPromptTemplate.from_messages(
 
 def review_steps(state):
     """LLM reviews steps and either approves or provides feedback."""
-    print(state)
     review_chain = review_prompt | llm
     review_result = review_chain.invoke(
         {"steps": json.dumps([step.__dict__ for step in state.instructions.steps])}
     )
 
-    if "approved" in review_result.lower():
+    if "approved" in review_result.content.lower():
         return {"approved": True, "feedback": None}
     else:
-        return {"approved": False, "feedback": review_result}
+        feedback_json = review_result.content
+        return {"approved": False, "feedback": feedback_json}
 
 
-# --- Step 4: Define State for LangGraph ---
 class WorkflowState(BaseModel):
     instructions: InstructionOutput = None
-    feedback: str = None
+    feedback: Optional[str] = None
     approved: bool = False
     user_input: str
 
 
-# --- Step 5: Define the Workflow ---
 workflow = StateGraph(WorkflowState)
 
 
 # 1. Generate steps
 def generate_steps(state):
-    """Generates steps using LLM based on user input."""
-    instructions = instruction_chain.invoke({"input": state.user_input})
+    """Generates steps using LLM based on user input and feedback (if any)."""
+    previous_feedback = state.feedback if state.feedback else "No prior feedback."
+
+    instructions = instruction_chain.invoke(
+        {
+            "input": state.user_input,
+            "previous_feedback": f"Previous feedback: {previous_feedback}",
+        }
+    )
     return {"instructions": instructions}
 
 
@@ -111,25 +130,25 @@ workflow.add_edge("generate_steps", "review_steps")
 # 4. Handle Approval Loop
 def check_approval(state):
     """If approved, end the process; otherwise, regenerate steps."""
-    if state["approved"]:
+
+    if state.approved:
         print("✅ Steps Approved! Here is the final instruction set:")
-        print(json.dumps(state["instructions"].dict(), indent=2))
+        print(json.dumps(state.instructions.dict(), indent=2))
         return "end"
     else:
         print("❌ Feedback received. Regenerating steps...")
-        print(f"Feedback: {state['feedback']}")
+        print(f"Feedback: {state.feedback}")
         return "generate_steps"
 
 
 workflow.add_conditional_edges("review_steps", check_approval)
 
-# 5. Finalizing Graph
 workflow.set_entry_point("generate_steps")
 workflow.add_node("end", lambda x: x)
 checkpointer = MemorySaver()
 graph = workflow.compile()
 
-# --- Step 6: Run the Workflow ---
+
 user_input = input("Hey, how can I help you today?\n")
 
 graph.invoke({"user_input": user_input})
