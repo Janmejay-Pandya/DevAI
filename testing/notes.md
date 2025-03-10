@@ -25,3 +25,6 @@ chat_completion = client.chat.completions.create(
 
 print(chat_completion.choices[0].message.content)
 `
+
+### To start remote vs-code (code-server)
+`docker run -p 8080:8080 -v $(pwd)/code-environment:/tmp/code-environment code-server-update`
