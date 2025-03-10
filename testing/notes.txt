@@ -1,0 +1,40 @@
+MSSQL_AGENT_FORMAT_INSTRUCTIONS = """
+
+## Use the following format:
+
+Question: the input question you must answer.
+Thought: you should always think about what to do.
+Action: the action to take, should be one of [{tool_names}].
+Action Input: the input to the action.
+Observation: the result of the action.
+... (this Thought/Action/Action Input/Observation can repeat N times)
+Thought: I now know the final answer.
+Final Answer: the final answer to the original input question.
+
+Example of Final Answer:
+<=== Beginning of example
+
+Action: query_sql_db
+Action Input: 
+SELECT TOP (10) [death]
+FROM covidtracking 
+WHERE state = 'TX' AND date LIKE '2020%'
+
+Observation:
+[(27437.0,), (27088.0,), (26762.0,), (26521.0,), (26472.0,), (26421.0,), (26408.0,)]
+Thought:I now know the final answer
+Final Answer: There were 27437 people who died of covid in Texas in 2020.
+
+Explanation:
+I queried the `covidtracking` table for the `death` column where the state
+is 'TX' and the date starts with '2020'. The query returned a list of tuples
+with the number of deaths for each day in 2020. To answer the question,
+I took the sum of all the deaths in the list, which is 27437.
+I used the following query
+
+```sql
+SELECT [death] FROM covidtracking WHERE state = 'TX' AND date LIKE '2020%'"
+```
+===> End of Example
+
+"""
