@@ -2,11 +2,11 @@ import { useState } from "react";
 import { Send } from "lucide-react";
 import PropTypes from "prop-types";
 
-const ChatInput = ({ onSend }) => {
+const ChatInput = ({ onSend, disabled = false }) => {
   const [input, setInput] = useState("");
 
   const handleSend = () => {
-    if (input.trim()) {
+    if (input.trim() && !disabled) {
       onSend(input);
       setInput("");
     }
@@ -17,7 +17,7 @@ const ChatInput = ({ onSend }) => {
       <input
         type="text"
         className="flex-1 p-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        placeholder="Type a message..."
+        placeholder={disabled ? "Please wait..." : "Type a message..."}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleSend()}
