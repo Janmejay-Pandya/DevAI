@@ -21,10 +21,14 @@ const ChatInput = ({ onSend }) => {
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleSend()}
+        disabled={disabled}
       />
       <button
-        className="ml-2 p-2 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600"
+        className={`ml-2 p-2 rounded-lg shadow-md ${
+          disabled ? "bg-gray-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600 text-white"
+        }`}
         onClick={handleSend}
+        disabled={disabled}
       >
         <Send size={18} />
       </button>
@@ -34,6 +38,7 @@ const ChatInput = ({ onSend }) => {
 
 ChatInput.propTypes = {
   onSend: PropTypes.func.isRequired,
+  disabled: PropTypes.bool,
 };
 
 export default ChatInput;
