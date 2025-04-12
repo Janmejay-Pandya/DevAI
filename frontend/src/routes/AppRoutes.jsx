@@ -5,6 +5,7 @@ import Main from "../pages/Main";
 import Login from "../components/Login/Login";
 import { ACCESS_TOKEN } from "../constants";
 import PropTypes from "prop-types";
+import Register from "../components/Register/Register";
 
 const ProtectedRoute = ({ children }) => {
   const isAuthenticated = !!localStorage.getItem(ACCESS_TOKEN);
@@ -39,7 +40,8 @@ const AppRoutes = () => {
     <>
       <Navbar isAuthenticated={isAuthenticated} />
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login/" element={<Login />} />
+        <Route path="/register/" element={<Register />} />
         <Route
           path="/"
           element={

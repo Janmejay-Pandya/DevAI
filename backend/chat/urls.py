@@ -18,4 +18,5 @@ urlpatterns = [
     path("assistant/respond/", 
          views.AssistantResponseView.as_view(), 
          name="assistant-respond"),
+
 ]

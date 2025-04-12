@@ -13,13 +13,15 @@ from django.contrib.auth.models import User
 # @authentication_classes([]) # for testing!!!! must remove later!!!!!
 # @permission_classes([]) # for testing!!!! must remove later!!!!!
 
-class CreateUserView(generics.CreateAPIView):
+class CreateListUserView(generics.ListCreateAPIView):
     # specifies the list of objects we need to check to not create preexisting user
-    queryset = User.objects.all
+    queryset = User.objects.all()
     # tells the data what kind of data we need to accept
     serializer_class = UserSerializer
     # who can access
     permission_classes = [AllowAny]
+    def get_queryset(self):
+        return User.objects.all()
 
 class ChatListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatSerializer
