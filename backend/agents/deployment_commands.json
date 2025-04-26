@@ -1,0 +1,34 @@
+[
+  {
+    "command": "gh repo create {REPO} --public",
+    "description": "Creating GitHub Repo"
+  },
+  {
+    "command": "git init -b main",
+    "description": "Initializing Git"
+  },
+  {
+    "command": "git remote add origin git@github.com/{USERNAME}/{REPO}.git",
+    "description": "Adding remote repository"
+  },
+  {
+    "command": "git add .",
+    "description": "Staging changes"
+  },
+  {
+    "command": "git commit -m \"Initial Commit\"",
+    "description": "Committing changes"
+  },
+  {
+    "command": "git push -u origin main",
+    "description": "Pushing changes"
+  },
+  {
+    "command": "sleep 3",
+    "description": "Waiting for GitHub to process the repository"
+  },
+  {
+    "command": "gh api -H 'Accept: application/vnd.github+json' repos/{USERNAME}/{REPO}/pages -f source[branch]=main -f source[path]=/",
+    "description": "Deploying to gh-pages"
+  }
+]
