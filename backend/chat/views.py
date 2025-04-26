@@ -22,69 +22,73 @@ class CreateListUserView(generics.ListCreateAPIView):
     serializer_class = UserSerializer
     # who can access
     permission_classes = [AllowAny]
+
     def get_queryset(self):
         return User.objects.all()
+
 
 class ChatListCreateView(generics.ListCreateAPIView):
     serializer_class = ChatSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
         return Chat.objects.filter(user=self.request.user, is_active=True)
-    
+
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
 
 class ChatDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ChatSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
         return Chat.objects.filter(user=self.request.user)
+
 
 class MessageListCreateView(generics.ListCreateAPIView):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        chat_pk = self.kwargs.get('chat_pk')
+        chat_pk = self.kwargs.get("chat_pk")
         return Message.objects.filter(chat_id=chat_pk, chat__user=self.request.user)
-    
+
     def perform_create(self, serializer):
-        chat_pk = self.kwargs.get('chat_pk')
+        chat_pk = self.kwargs.get("chat_pk")
         chat = get_object_or_404(Chat, id=chat_pk, user=self.request.user)
         serializer.save(chat=chat)
+
 
 class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        chat_pk = self.kwargs.get('chat_pk')
+        chat_pk = self.kwargs.get("chat_pk")
         return Message.objects.filter(chat_id=chat_pk, chat__user=self.request.user)
+
 
 class AssistantResponseView(APIView):
     permission_classes = [IsAuthenticated]
-    
+
     def post(self, request, format=None):
-        chat_id = request.data.get('chat_id')
-        user_message = request.data.get('message')
-        is_choice = request.data.get('is_choice')
-        
+        chat_id = request.data.get("chat_id")
+        user_message = request.data.get("message")
+        is_choice = request.data.get("is_choice")
+
         chat = get_object_or_404(Chat, id=chat_id, user=request.user)
         # echoing for now, will add agent response here
         # response_text = f"You said: {user_message}"
 
         master_agent = MasterAgent(chat_id)
-        response_text, is_seeking_approval = master_agent.handle_input(user_message, is_choice)
-        
-        Message.objects.create(
-            chat=chat,
-            sender='assistant',
-            content=response_text
+        response_text, is_seeking_approval = master_agent.handle_input(
+            user_message, is_choice
         )
-        
-        return Response({
-            'response': response_text,
-            'is_seeking_approval': is_seeking_approval
-        }, status=status.HTTP_200_OK)
+
+        Message.objects.create(chat=chat, sender="assistant", content=response_text)
+
+        return Response(
+            {"response": response_text, "is_seeking_approval": is_seeking_approval},
+            status=status.HTTP_200_OK,
+        )

@@ -1,6 +1,15 @@
 from typing import Tuple
 from chat.models import Chat
 from projects.models import Project
+from .ideation_agent import (
+    generate_mvp_features,
+    debate_mvp_features,
+    finalize_mvp,
+    brainstorm_design_guidelines,
+    decide_tech_stack,
+)
+from .frontend_agent import generate_frontend
+
 
 class MasterAgent:
     def __init__(self, chat_id: int):
@@ -47,12 +56,26 @@ class MasterAgent:
             return self._handle_deploy(intent)
         elif step == "complete":
             return self._handle_complete(intent)
-        
-        return ("Something went wrong. Let's start over. What product would you like to build?", False)
+
+        return (
+            "Something went wrong. Let's start over. What product would you like to build?",
+            False,
+        )
 
     def _get_previous_step(self, current_step):
         """Return the previous step in the workflow"""
-        step_sequence = ["init", "generate_mvp", "debate", "finalize_mvp", "design", "tech_stack", "development", "test", "deploy", "complete"]
+        step_sequence = [
+            "init",
+            "generate_mvp",
+            "debate",
+            "finalize_mvp",
+            "design",
+            "tech_stack",
+            "development",
+            "test",
+            "deploy",
+            "complete",
+        ]
         try:
             current_index = step_sequence.index(current_step)
             if current_index > 0:
@@ -73,7 +96,7 @@ class MasterAgent:
             "development": "Ready to start development?",
             "test": "Should we begin testing the application?",
             "deploy": "Testing completed. Should we deploy the application?",
-            "complete": "Your application has been deployed. Would you like to make any changes?"
+            "complete": "Your application has been deployed. Would you like to make any changes?",
         }
         return prompts.get(step, "What would you like to do next?")
 
@@ -83,9 +106,15 @@ class MasterAgent:
             self.project.product_description = intent.get("request", "")
             self.project.current_step = "generate_mvp"
             self.project.save()
-            return (f"Got your product description. You want to make {intent.get('request', '')}. {self._get_step_prompt('generate_mvp')}", True)
+            return (
+                f"Got your product description. You want to make {intent.get('request', '')}. {self._get_step_prompt('generate_mvp')}",
+                True,
+            )
         elif intent["intent"] == "reject":
-            return ("I understand. Let's start over. What product would you like to build?", False)
+            return (
+                "I understand. Let's start over. What product would you like to build?",
+                False,
+            )
         else:
             return ("Please describe the product you want to build.", False)
 
@@ -95,15 +124,29 @@ class MasterAgent:
             self.project.mvp = mvp
             self.project.current_step = "debate"
             self.project.save()
-            return (f"MVP Feature List:\n{mvp}\n\n{self._get_step_prompt('debate')}", True)
+            return (
+                f"MVP Feature List:\n{mvp}\n\n{self._get_step_prompt('debate')}",
+                True,
+            )
         elif intent["intent"] == "reject":
-            return (f"Let's reconsider the MVP. Would you like to modify the product description?", False)
+            return (
+                f"Let's reconsider the MVP. Would you like to modify the product description?",
+                False,
+            )
         elif intent["intent"] == "modify":
-            self.project.product_description = intent.get("value", self.project.product_description)
+            self.project.product_description = intent.get(
+                "value", self.project.product_description
+            )
             self.project.save()
-            return ("Updated description. Regenerating MVP... Should I continue with this updated description?", True)
+            return (
+                "Updated description. Regenerating MVP... Should I continue with this updated description?",
+                True,
+            )
         else:
-            return ("Should I proceed with generating the MVP features based on your description?", True)
+            return (
+                "Should I proceed with generating the MVP features based on your description?",
+                True,
+            )
 
     def _handle_debate(self, intent):
         if intent["intent"] == "approve":
@@ -111,16 +154,28 @@ class MasterAgent:
             self.project.critiques = critiques
             self.project.current_step = "finalize_mvp"
             self.project.save()
-            return (f"Here's what each agent thinks:\n{critiques}\n\n{self._get_step_prompt('finalize_mvp')}", True)
+            return (
+                f"Here's what each agent thinks:\n{critiques}\n\n{self._get_step_prompt('finalize_mvp')}",
+                True,
+            )
         elif intent["intent"] == "reject":
             self.project.current_step = "generate_mvp"
             self.project.save()
-            return ("Let's go back and revise the MVP features first. Can you tell me what changes you want or Should I regenerate them?", True)
+            return (
+                "Let's go back and revise the MVP features first. Can you tell me what changes you want or Should I regenerate them?",
+                True,
+            )
         elif intent["intent"] == "modify":
             # Handle specific modification to the MVP before debate
-            return ("I've noted your modifications to the MVP. Should we proceed with getting critiques now?", True)
+            return (
+                "I've noted your modifications to the MVP. Should we proceed with getting critiques now?",
+                True,
+            )
         else:
-            return ("Should we proceed with debating the MVP features to get different perspectives?", True)
+            return (
+                "Should we proceed with debating the MVP features to get different perspectives?",
+                True,
+            )
 
     def _handle_finalize_mvp(self, intent):
         if intent["intent"] == "approve":
@@ -128,14 +183,26 @@ class MasterAgent:
             self.project.final_mvp = final
             self.project.current_step = "design"
             self.project.save()
-            return (f"Finalized MVP:\n{final}\n\n{self._get_step_prompt('design')}", True)
+            return (
+                f"Finalized MVP:\n{final}\n\n{self._get_step_prompt('design')}",
+                True,
+            )
         elif intent["intent"] == "reject":
-            return ("Let's take another look at the MVP. What changes would you like to make?", False)
+            return (
+                "Let's take another look at the MVP. What changes would you like to make?",
+                False,
+            )
         elif intent["intent"] == "modify":
             # Handle modifications to the critiques or MVP before finalizing
-            return ("I've noted your suggestions. Should we finalize the MVP now with these considerations?", True)
+            return (
+                "I've noted your suggestions. Should we finalize the MVP now with these considerations?",
+                True,
+            )
         else:
-            return ("Should we finalize the MVP based on the critiques we've received?", True)
+            return (
+                "Should we finalize the MVP based on the critiques we've received?",
+                True,
+            )
 
     def _handle_design(self, intent):
         if intent["intent"] == "approve":
@@ -143,12 +210,21 @@ class MasterAgent:
             self.project.design_guidelines = design
             self.project.current_step = "tech_stack"
             self.project.save()
-            return (f"Design guidelines:\n{design}\n\n{self._get_step_prompt('tech_stack')}", True)
+            return (
+                f"Design guidelines:\n{design}\n\n{self._get_step_prompt('tech_stack')}",
+                True,
+            )
         elif intent["intent"] == "reject":
-            return ("Let's reconsider the design approach. Please provide what kind of design guidelines you would like instead?", False) 
+            return (
+                "Let's reconsider the design approach. Please provide what kind of design guidelines you would like instead?",
+                False,
+            )
         elif intent["intent"] == "modify":
             # Handle design modifications
-            return ("I've noted your design preferences. Would you like me to incorporate these and continue?", True)
+            return (
+                "I've noted your design preferences. Would you like me to incorporate these and continue?",
+                True,
+            )
         else:
             return ("Should I generate design guidelines for the product?", True)
 
@@ -158,12 +234,21 @@ class MasterAgent:
             self.project.tech_stack = stack
             self.project.current_step = "development"
             self.project.save()
-            return (f"Recommended Tech Stack:\n{stack}.\n\nIdeation and Design Completed. {self._get_step_prompt('development')}", True)
+            return (
+                f"Recommended Tech Stack:\n{stack}.\n\nIdeation and Design Completed. {self._get_step_prompt('development')}",
+                True,
+            )
         elif intent["intent"] == "reject":
-            return ("What constraints or preferences do you have for the tech stack?", False)
+            return (
+                "What constraints or preferences do you have for the tech stack?",
+                False,
+            )
         elif intent["intent"] == "modify":
             # Handle tech stack modifications
-            return ("I've noted your tech stack preferences. Would you like me to recommend a tech stack based on these?", True)
+            return (
+                "I've noted your tech stack preferences. Would you like me to recommend a tech stack based on these?",
+                True,
+            )
         else:
             return ("Should I recommend a tech stack for implementation?", True)
 
@@ -171,11 +256,21 @@ class MasterAgent:
         if intent["intent"] == "approve":
             self.project.current_step = "test"
             self.project.save()
-            return ("I've started development on Features A and C. Do you have any specific changes you'd like to see?", True)
+            generate_frontend("A note taking app. use font roboto. make the theme of website green and white")
+            return (
+                "I've started development on Features A and C. Do you have any specific changes you'd like to see?",
+                True,
+            )
         elif intent["intent"] == "reject":
-            return ("Let's revisit the development plan. What concerns do you have?", False)
+            return (
+                "Let's revisit the development plan. What concerns do you have?",
+                False,
+            )
         elif intent["intent"] == "modify":
-            return ("I've made the suggested changes. Do you have any more changes you'd like to make?", True)
+            return (
+                "I've made the suggested changes. Do you have any more changes you'd like to make?",
+                True,
+            )
         elif intent["intent"] == "complete":
             self.project.current_step = "test"
             self.project.save()
@@ -187,14 +282,23 @@ class MasterAgent:
         if intent["intent"] == "approve":
             self.project.current_step = "deploy"
             self.project.save()
-            return (f"Testing completed. All test cases passed. {self._get_step_prompt('deploy')}", True)
+            return (
+                f"Testing completed. All test cases passed. {self._get_step_prompt('deploy')}",
+                True,
+            )
         elif intent["intent"] == "reject":
             self.project.current_step = "development"
             self.project.save()
-            return ("Let's go back to development to fix the issues. What needs to be addressed?", False)
+            return (
+                "Let's go back to development to fix the issues. What needs to be addressed?",
+                False,
+            )
         elif intent["intent"] == "modify":
             # Handle test modifications
-            return ("I've noted your testing suggestions. Should we proceed with these adjustments?", True)
+            return (
+                "I've noted your testing suggestions. Should we proceed with these adjustments?",
+                True,
+            )
         else:
             return ("Should we proceed with testing the application?", True)
 
@@ -202,23 +306,35 @@ class MasterAgent:
         if intent["intent"] == "approve":
             self.project.current_step = "complete"
             self.project.save()
-            return ("Your application has been deployed! You can view it at http://localhost:3000", False)
+            return (
+                "Your application has been deployed! You can view it at http://localhost:3000",
+                False,
+            )
         elif intent["intent"] == "reject":
             return ("What concerns do you have about deployment?", False)
         elif intent["intent"] == "modify":
             # Handle deployment modifications
-            return ("I've noted your deployment preferences. Should we proceed with deployment?", True)
+            return (
+                "I've noted your deployment preferences. Should we proceed with deployment?",
+                True,
+            )
         else:
             return ("Should we deploy the application now?", True)
 
     def _handle_complete(self, intent):
         if intent["intent"] == "modify":
             # Handle post-deployment modifications
-            return ("What specific changes would you like to make to the deployed application?", False)
+            return (
+                "What specific changes would you like to make to the deployed application?",
+                False,
+            )
         if intent["intent"] == "reject":
             return ("Thank you! Bye Bye!", False)
         else:
-            return ("Your application is complete and deployed. Would you like to make any changes?", True)
+            return (
+                "Your application is complete and deployed. Would you like to make any changes?",
+                True,
+            )
 
     # Helper methods (same as original)
     def _generate_mvp(self):
@@ -239,7 +355,7 @@ class MasterAgent:
 
     def _generate_tech_stack(self):
         # return decide_tech_stack(self.project.product_description, self.project.final_mvp, self.project.design_guidelines)
-        return "react app."
+        return "HTML, CSS and Vanilla JS"
 
     def _interpret_feedback(self, feedback: str) -> dict:
         """
@@ -261,6 +377,6 @@ class MasterAgent:
         """
         # In a real implementation, you would use an LLM to interpret the intent
         # return json.loads(some_llm.predict(prompt))
-        
+
         # For now, just return a dummy response for demonstration
         return {"intent": "approve", "request": feedback}
