@@ -7,6 +7,7 @@ from .models import Chat, Message
 from .serializers import ChatSerializer, MessageSerializer, UserSerializer
 from django.contrib.auth.models import User
 from agents.master_agent import MasterAgent
+from projects.models import Project
 
 # # for testing!!!! must remove later!!!!!
 # from rest_framework.decorators import authentication_classes, permission_classes
@@ -78,6 +79,7 @@ class AssistantResponseView(APIView):
         is_choice = request.data.get("is_choice")
 
         chat = get_object_or_404(Chat, id=chat_id, user=request.user)
+        project_stage = Project.objects.get(chat=chat).current_step
         # echoing for now, will add agent response here
         # response_text = f"You said: {user_message}"
 
@@ -89,6 +91,6 @@ class AssistantResponseView(APIView):
         Message.objects.create(chat=chat, sender="assistant", content=response_text)
 
         return Response(
-            {"response": response_text, "is_seeking_approval": is_seeking_approval},
+            {"response": response_text, "is_seeking_approval": is_seeking_approval, "project_stage": project_stage},
             status=status.HTTP_200_OK,
         )

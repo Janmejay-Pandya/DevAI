@@ -10,6 +10,7 @@ from .ideation_agent import (
 )
 from .frontend_agent import generate_frontend
 from .deploy_agent import deploy_to_github
+from utils.github_utils import github_user_exists, github_repo_exists
 
 
 class MasterAgent:
@@ -54,7 +55,7 @@ class MasterAgent:
         elif step == "test":
             return self._handle_test(intent)
         elif step == "deploy":
-            return self._handle_deploy(intent)
+            return self._handle_deploy(intent, user_input)
         elif step == "complete":
             return self._handle_complete(intent)
 
@@ -303,23 +304,47 @@ class MasterAgent:
         else:
             return ("Should we proceed with testing the application?", True)
 
-    def _handle_deploy(self, intent):
+    def _handle_deploy(self, intent, user_input):
+        user_input = user_input.strip()
+
+        if self.project.github_username is None:
+            if not user_input:
+                return ("Please provide your GitHub username:", False)
+            elif not github_user_exists(user_input):
+                return ("I couldn't find that GitHub user. Please double-check and send the correct username.", False)
+            else:
+                self.project.github_username = user_input
+                self.project.save()
+                return ("Great! Now, please provide a **new** repository name (make sure it doesn't already exist):", False)
+
+        if self.project.github_repo_name is None:
+            if not user_input:
+                return ("Please provide a repository name for your project:", False)
+            elif github_repo_exists(self.project.github_username, user_input):
+                return (f"⚠️ A repository named '{user_input}' already exists under your account. Please choose a different repository name.", False)
+            else:
+                self.project.github_repo_name = user_input
+                self.project.save()
+                return (
+                    f"Perfect! We'll create and deploy to https://github.com/{self.project.github_username}/{self.project.github_repo_name}. Shall we proceed?",
+                    True,
+                )
+
+        # Usual deployment flows here
         if intent["intent"] == "approve":
+            # deploy_to_github(github_username=self.project.github_username, repo_name=self.project.github_repo_name)
             self.project.current_step = "complete"
+            self.project.deployed_url = f"https://{self.project.github_username}.github.io/{self.project.github_repo_name}/"
             self.project.save()
-            deploy_to_github()
+
             return (
-                "Your application has been deployed! You can view it at https://Miran-Firdausi.github.io/automated-repo/",
+                f"✅ Your application has been deployed! View it at {self.project.deployed_url}",
                 False,
             )
         elif intent["intent"] == "reject":
             return ("What concerns do you have about deployment?", False)
         elif intent["intent"] == "modify":
-            # Handle deployment modifications
-            return (
-                "I've noted your deployment preferences. Should we proceed with deployment?",
-                True,
-            )
+            return ("I've noted your deployment preferences. Should we proceed with deployment?", True)
         else:
             return ("Should we deploy the application now?", True)
 
@@ -333,7 +358,7 @@ class MasterAgent:
         if intent["intent"] == "reject":
             return ("Thank you! Bye Bye!", False)
         else:
-            deploy_to_github()
+            # deploy_to_github()
             return (
                 "Your application is complete and deployed. Would you like to make any changes?",
                 True,

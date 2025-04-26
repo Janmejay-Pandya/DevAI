@@ -1,15 +1,19 @@
 import { useState, useEffect, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import api from "../../api";
 import { API_ENDPOINTS } from "../../constants";
+import { setStage } from "../../store/slices/projectSlice";
+import { setCurrentChatId } from "../../store/slices/chatSlice";
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentChatId, setCurrentChatId] = useState(null);
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
+  const currentChatId = useSelector((state) => state.chat.currentChatId);
+  const dispatch = useDispatch();
 
   useEffect(() => {
     const initializeChat = async () => {
@@ -17,7 +21,7 @@ const Chat = () => {
         const savedChatId = localStorage.getItem("currentChatId");
 
         if (savedChatId) {
-          setCurrentChatId(savedChatId);
+          dispatch(setCurrentChatId(savedChatId));
           try {
             const response = await api.get(API_ENDPOINTS.MESSAGES(savedChatId));
             setMessages(
@@ -49,7 +53,7 @@ const Chat = () => {
           title: `Chat ${new Date().toLocaleString()}`,
         });
 
-        setCurrentChatId(response.data.id);
+        dispatch(setCurrentChatId(response.data.id));
         localStorage.setItem("currentChatId", response.data.id);
 
         // Initialize with welcome message
@@ -164,6 +168,10 @@ const Chat = () => {
         message: choiceText,
         is_choice: true,
       });
+
+      if (response.data.project_stage) {
+        dispatch(setStage(response.data.project_stage));
+      }
 
       setMessages((prev) => {
         const filtered = prev.filter((msg) => !msg.isLoading);

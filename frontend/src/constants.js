@@ -9,4 +9,5 @@ export const API_ENDPOINTS = {
   REGISTER: "/api/user/register/",
   REFRESH: "/api/token/refresh/",
   USER: "/api/auth/user/",
+  PREVIEW_URL: (chatId) => `/api/project/${chatId}/deployed-url/`,
 };

@@ -9,6 +9,9 @@ class AgentSteps(models.TextChoices):
     FINALIZE_MVP = "finalize_mvp", "Finalize MVP"
     DESIGN = "design", "Design Guidelines"
     TECH_STACK = "tech_stack", "Tech Stack Recommendation"
+    DEVELOPMENT = "development", "Development"
+    TESTING = "test", "Testing"
+    DEPLOYMENT = "deploy", "Deployment"
     COMPLETE = "complete", "Completed"
 
 
@@ -25,6 +28,9 @@ class Project(models.Model):
     final_mvp = models.TextField(blank=True, null=True)
     design_guidelines = models.TextField(blank=True, null=True)
     tech_stack = models.TextField(blank=True, null=True)
+    github_username = models.CharField(max_length=100, blank=True, null=True)
+    github_repo_name = models.CharField(max_length=100, blank=True, null=True)
+    deployed_url = models.URLField(blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
