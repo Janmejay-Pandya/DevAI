@@ -69,13 +69,14 @@ class AssistantResponseView(APIView):
     def post(self, request, format=None):
         chat_id = request.data.get('chat_id')
         user_message = request.data.get('message')
+        is_choice = request.data.get('is_choice')
         
         chat = get_object_or_404(Chat, id=chat_id, user=request.user)
         # echoing for now, will add agent response here
         # response_text = f"You said: {user_message}"
 
         master_agent = MasterAgent(chat_id)
-        response_text = master_agent.handle_input(user_message)
+        response_text, is_seeking_approval = master_agent.handle_input(user_message, is_choice)
         
         Message.objects.create(
             chat=chat,
@@ -84,5 +85,6 @@ class AssistantResponseView(APIView):
         )
         
         return Response({
-            'response': response_text
+            'response': response_text,
+            'is_seeking_approval': is_seeking_approval
         }, status=status.HTTP_200_OK)
