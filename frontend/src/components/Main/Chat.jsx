@@ -23,7 +23,7 @@ const Chat = () => {
             setMessages(
               response.data.map((msg) => ({
                 text: msg.content,
-                isUser: msg.sender === "user",
+                isUser: msg.sender !== "assistant",
               })),
             );
           } catch (err) {
@@ -120,41 +120,10 @@ const Chat = () => {
     }
   };
 
-  const handleNewChat = async () => {
-    try {
-      localStorage.removeItem("currentChatId");
-      setMessages([]);
-
-      const response = await api.post(API_ENDPOINTS.CHATS, {
-        title: `Chat ${new Date().toLocaleString()}`,
-      });
-
-      setCurrentChatId(response.data.id);
-      localStorage.setItem("currentChatId", response.data.id);
-
-      setMessages([{ text: "Hello! How can I assist you today?", isUser: false }]);
-
-      // Save welcome message
-      await api.post(API_ENDPOINTS.MESSAGES(response.data.id), {
-        content: "Hello! How can I assist you today?",
-        sender: "assistant",
-      });
-    } catch (error) {
-      console.error("Error creating new chat:", error);
-      setError("Could not create a new chat");
-    }
-  };
-
   return (
     <div className="flex flex-col h-full bg-gray-100 mx-auto">
-      <div className="flex justify-between items-center p-2 bg-white border-b border-gray-300">
-        <div className="font-medium">Chat {currentChatId ? `#${currentChatId}` : ""}</div>
-        <button
-          onClick={handleNewChat}
-          className="px-3 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-        >
-          New Chat
-        </button>
+      <div className="flex justify-center items-center p-2 bg-white border-b border-gray-300">
+        <div className="font-medium">Project {currentChatId ? `#${currentChatId}` : ""}</div>
       </div>
 
       {error && (

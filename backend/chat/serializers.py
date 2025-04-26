@@ -16,8 +16,8 @@ class UserSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
-        fields = ['id', 'content', 'created_at']
-        read_only_fields = ['created_at', 'user']
+        fields = ['id', 'content', 'sender', 'created_at']
+        read_only_fields = ['created_at']
 
 class ChatSerializer(serializers.ModelSerializer):
     message_count = serializers.SerializerMethodField()

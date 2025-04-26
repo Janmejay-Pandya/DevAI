@@ -6,12 +6,14 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Chat, Message
 from .serializers import ChatSerializer, MessageSerializer, UserSerializer
 from django.contrib.auth.models import User
+from agents.master_agent import MasterAgent
 
 # # for testing!!!! must remove later!!!!!
 # from rest_framework.decorators import authentication_classes, permission_classes
 
 # @authentication_classes([]) # for testing!!!! must remove later!!!!!
 # @permission_classes([]) # for testing!!!! must remove later!!!!!
+
 
 class CreateListUserView(generics.ListCreateAPIView):
     # specifies the list of objects we need to check to not create preexisting user
@@ -70,7 +72,10 @@ class AssistantResponseView(APIView):
         
         chat = get_object_or_404(Chat, id=chat_id, user=request.user)
         # echoing for now, will add agent response here
-        response_text = f"You said: {user_message}"
+        # response_text = f"You said: {user_message}"
+
+        master_agent = MasterAgent(chat_id)
+        response_text = master_agent.handle_input(user_message)
         
         Message.objects.create(
             chat=chat,
