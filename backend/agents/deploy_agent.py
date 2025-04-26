@@ -1,34 +1,40 @@
 import json
 import os
 import subprocess
+import time
 
-with open("deployment_commands.json", "r") as file:
+# Load deployment commands
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(BASE_DIR, "deployment_commands.json"), "r") as file:
     commands = json.load(file)
 
-project_dir = None  # Stores the working directory dynamically
+project_dir = os.path.abspath(os.path.join(".", "code-environment"))
 
-# Execute each command
-for command_item in commands:
-    try:
-        command = command_item["command"]
+def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-repo-3"):
+    for command_item in commands:
+        try:
+            raw_command = command_item["command"]
+            description = command_item["description"]
 
-        # Detect `cd <folder_name>` and update project_dir
-        if command.startswith("cd "):
-            project_dir = os.path.abspath(command.split(" ", 1)[1])
+            # Format the command dynamically
+            command = raw_command.replace("{USERNAME}", github_username).replace("{REPO}", repo_name)
 
-        # Use the extracted `project_dir` as `cwd` for subsequent commands
-        work_dir = project_dir if project_dir else None
+            # Special case: sleep
+            if command.startswith("sleep"):
+                seconds = int(command.split()[1])
+                print(f"Sleeping for {seconds} seconds...")
+                time.sleep(seconds)
+                continue
 
-        result = subprocess.run(
-            command,
-            shell=True,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=work_dir,
-        )
-        print(
-            f"{command_item["description"]}. Command '{command}' executed successfully:\n{result.stdout.decode()}"
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command '{command}':\n{e.stderr.decode()}")
+            result = subprocess.run(
+                command,
+                shell=True,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=project_dir,
+            )
+            print(f"{description}. Command '{command}' executed successfully:\n{result.stdout.decode()}")
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing command '{command}':\n{e.stderr.decode()}")

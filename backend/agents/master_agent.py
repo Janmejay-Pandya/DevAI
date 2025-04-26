@@ -9,6 +9,7 @@ from .ideation_agent import (
     decide_tech_stack,
 )
 from .frontend_agent import generate_frontend
+from .deploy_agent import deploy_to_github
 
 
 class MasterAgent:
@@ -306,8 +307,9 @@ class MasterAgent:
         if intent["intent"] == "approve":
             self.project.current_step = "complete"
             self.project.save()
+            deploy_to_github()
             return (
-                "Your application has been deployed! You can view it at http://localhost:3000",
+                "Your application has been deployed! You can view it at https://Miran-Firdausi.github.io/automated-repo/",
                 False,
             )
         elif intent["intent"] == "reject":
@@ -331,6 +333,7 @@ class MasterAgent:
         if intent["intent"] == "reject":
             return ("Thank you! Bye Bye!", False)
         else:
+            deploy_to_github()
             return (
                 "Your application is complete and deployed. Would you like to make any changes?",
                 True,
