@@ -78,6 +78,13 @@ const Chat = () => {
 
     // Update UI immediately
     setMessages((prev) => [...prev, { text, isUser: true }]);
+    // Clear choices if user manually types
+    setMessages((prev) =>
+      prev.map((msg) => ({
+        ...msg,
+        isSeekingApproval: false,
+      })),
+    );
     setIsLoading(true);
 
     try {
@@ -99,7 +106,14 @@ const Chat = () => {
       // Update messages with assistant response
       setMessages((prev) => {
         const filtered = prev.filter((msg) => !msg.isLoading);
-        return [...filtered, { text: response.data.response, isUser: false }];
+        return [
+          ...filtered,
+          {
+            text: response.data.response,
+            isUser: false,
+            isSeekingApproval: response.data.is_seeking_approval,
+          },
+        ];
       });
 
       // No need to save assistant response as the backend should already do this
@@ -113,6 +127,64 @@ const Chat = () => {
         return [
           ...filtered,
           { text: "Sorry, I couldn't process your message. Please try again.", isUser: false },
+        ];
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleChoice = async (choiceText) => {
+    if (!choiceText.trim()) return;
+
+    // Remove all pending choices immediately
+    setMessages((prev) =>
+      prev.map((msg) => ({
+        ...msg,
+        isSeekingApproval: false,
+      })),
+    );
+
+    setMessages((prev) => [...prev, { text: choiceText, isUser: true }]);
+    setIsLoading(true);
+
+    try {
+      // Save choice message to database
+      await api.post(API_ENDPOINTS.MESSAGES(currentChatId), {
+        content: choiceText,
+        sender: "user",
+      });
+
+      // Show thinking...
+      setMessages((prev) => [...prev, { text: "Thinking...", isUser: false, isLoading: true }]);
+
+      // Get assistant's new response
+      const response = await api.post(API_ENDPOINTS.ASSISTANT_RESPOND, {
+        chat_id: currentChatId,
+        message: choiceText,
+        is_choice: true,
+      });
+
+      setMessages((prev) => {
+        const filtered = prev.filter((msg) => !msg.isLoading);
+        return [
+          ...filtered,
+          {
+            text: response.data.response,
+            isUser: false,
+            isSeekingApproval: response.data.is_seeking_approval,
+          },
+        ];
+      });
+    } catch (error) {
+      console.error("Error sending choice:", error);
+      setError("Failed to process choice");
+
+      setMessages((prev) => {
+        const filtered = prev.filter((msg) => !msg.isLoading);
+        return [
+          ...filtered,
+          { text: "Sorry, I couldn't process your choice. Please try again.", isUser: false },
         ];
       });
     } finally {
@@ -137,7 +209,14 @@ const Chat = () => {
 
       <div className="flex-1 overflow-y-auto p-4">
         {messages.map((msg, index) => (
-          <ChatMessage key={index} text={msg.text} isUser={msg.isUser} isLoading={msg.isLoading} />
+          <ChatMessage
+            key={index}
+            text={msg.text}
+            isUser={msg.isUser}
+            isLoading={msg.isLoading}
+            is_choice={msg.isSeekingApproval}
+            onChoiceSelect={handleChoice}
+          />
         ))}
         <div ref={messagesEndRef} />
       </div>

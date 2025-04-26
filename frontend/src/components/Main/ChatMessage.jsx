@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { User, Bot } from "lucide-react";
 import PropTypes from "prop-types";
 
-const ChatMessage = ({ text, isUser, isLoading = false }) => (
+const ChatMessage = ({ text, isUser, isLoading = false, is_choice, onChoiceSelect }) => (
   <motion.div
     initial={{ opacity: 0, y: 10 }}
     animate={{ opacity: 1, y: 0 }}
@@ -21,18 +21,34 @@ const ChatMessage = ({ text, isUser, isLoading = false }) => (
           <div
             className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
             style={{ animationDelay: "0ms" }}
-          ></div>
+          />
           <div
             className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
             style={{ animationDelay: "300ms" }}
-          ></div>
+          />
           <div
             className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
             style={{ animationDelay: "600ms" }}
-          ></div>
+          />
         </div>
       ) : (
-        <span className="whitespace-pre-wrap break-words">{text}</span>
+        <div>
+          <span className="whitespace-pre-wrap break-words">{text}</span>
+
+          {is_choice && (
+            <div className="flex flex-col gap-2 mt-2 w-full">
+              {["Yes", "No"].map((choice, index) => (
+                <button
+                  key={index}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium py-1 px-2 rounded-md text-left"
+                  onClick={() => onChoiceSelect(choice)}
+                >
+                  {choice}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   </motion.div>
@@ -42,6 +58,8 @@ ChatMessage.propTypes = {
   text: PropTypes.string.isRequired,
   isUser: PropTypes.bool.isRequired,
   isLoading: PropTypes.bool,
+  is_choice: PropTypes.array,
+  onChoiceSelect: PropTypes.func,
 };
 
 export default ChatMessage;
