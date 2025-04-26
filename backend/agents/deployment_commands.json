@@ -4,11 +4,15 @@
     "description": "Creating GitHub Repo"
   },
   {
+    "command": "sleep 3",
+    "description": "Waiting for GitHub to process the repository"
+  },
+  {
     "command": "git init -b main",
     "description": "Initializing Git"
   },
   {
-    "command": "git remote add origin git@github.com/{USERNAME}/{REPO}.git",
+    "command": "git remote add origin git@github.com:{USERNAME}/{REPO}.git",
     "description": "Adding remote repository"
   },
   {

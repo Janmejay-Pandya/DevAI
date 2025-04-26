@@ -10,7 +10,7 @@ with open(os.path.join(BASE_DIR, "deployment_commands.json"), "r") as file:
 
 project_dir = os.path.abspath(os.path.join(".", "code-environment"))
 
-def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-repo-3"):
+def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-repo-6"):
     for command_item in commands:
         try:
             raw_command = command_item["command"]
