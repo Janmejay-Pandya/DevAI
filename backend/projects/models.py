@@ -12,14 +12,11 @@ class AgentSteps(models.TextChoices):
     COMPLETE = "complete", "Completed"
 
 
-
 class Project(models.Model):
-    chat = models.OneToOneField(Chat, on_delete=models.CASCADE, related_name='project')
-    
+    chat = models.OneToOneField(Chat, on_delete=models.CASCADE, related_name="project")
+
     current_step = models.CharField(
-        max_length=50,
-        choices=AgentSteps.choices,
-        default=AgentSteps.INIT
+        max_length=50, choices=AgentSteps.choices, default=AgentSteps.INIT
     )
 
     product_description = models.TextField(blank=True, null=True)
