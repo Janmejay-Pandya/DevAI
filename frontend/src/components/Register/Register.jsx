@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../../api";
 import { API_ENDPOINTS, ACCESS_TOKEN, REFRESH_TOKEN } from "../../constants";
 import axios from "axios";
+
 const Register = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
