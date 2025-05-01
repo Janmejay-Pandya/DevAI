@@ -1,0 +1,10 @@
+django
+channels
+uvicorn
+langchain
+langchain-core
+langchain-google-genai
+python-dotenv
+djangorestframework
+djangorestframework-simplejwt
+django-cors-headers
