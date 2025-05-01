@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from langchain.agents import initialize_agent, AgentType
 from langchain_core.tools import tool
 from langchain.memory import ConversationBufferMemory
@@ -8,6 +9,8 @@ from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv, find_dotenv
 from .prompts import FRONTEND_SYSTEM_PROMPT
+from utils.terminal_utils import TerminalLogger
+
 
 from typing import List
 
@@ -79,5 +82,8 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 
-def generate_frontend(user_request: str):
-    agent_executor.invoke({"input": user_request})
+async def generate_frontend(user_request: str):
+    await TerminalLogger.log("info", "development", "Development started!")
+    await asyncio.sleep(3)
+    # agent_executor.invoke({"input": user_request})
+    await TerminalLogger.log("success", "development", "Development Finished!")

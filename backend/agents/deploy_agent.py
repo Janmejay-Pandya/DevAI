@@ -1,7 +1,8 @@
-import json
 import os
+import json
+import asyncio
 import subprocess
-import time
+from utils.terminal_utils import TerminalLogger
 
 # Load deployment commands
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -10,7 +11,7 @@ with open(os.path.join(BASE_DIR, "deployment_commands.json"), "r") as file:
 
 project_dir = os.path.abspath(os.path.join(".", "code-environment"))
 
-def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-repo-6"):
+async def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-repo-6"):
     for command_item in commands:
         try:
             raw_command = command_item["command"]
@@ -19,11 +20,10 @@ def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-
             # Format the command dynamically
             command = raw_command.replace("{USERNAME}", github_username).replace("{REPO}", repo_name)
 
-            # Special case: sleep
             if command.startswith("sleep"):
                 seconds = int(command.split()[1])
                 print(f"Sleeping for {seconds} seconds...")
-                time.sleep(seconds)
+                await asyncio.sleep(seconds)
                 continue
 
             result = subprocess.run(
@@ -34,7 +34,9 @@ def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-
                 stderr=subprocess.PIPE,
                 cwd=project_dir,
             )
-            print(f"{description}. Command '{command}' executed successfully:\n{result.stdout.decode()}")
+            success_message = f"{description}. Command '{command}' executed successfully:\n{result.stdout.decode()}"
+            await TerminalLogger.log("success", "deployment", success_message)
 
         except subprocess.CalledProcessError as e:
-            print(f"Error executing command '{command}':\n{e.stderr.decode()}")
+            error_message = f"Error executing command '{command}':\n{e.stderr.decode()}"
+            await TerminalLogger.log("error", "deployment", error_message)

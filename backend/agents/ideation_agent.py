@@ -83,7 +83,7 @@ def decide_tech_stack(product_description, final_mvp, design_guidelines):
     prompt = f"""
     Given the product description: "{product_description}", the finalized MVP feature list: {final_mvp}, and the design guidelines: {design_guidelines},
     suggest the most suitable tech stack.
-    Consider frontend and backend technologies, database choices, deployment options, and scalability factors.
+    Consider frontend and backend technologies, database choices, and scalability factors.
     Don't give options; just provide a single tech stack recommendation.
     """
     response = llm_techstack_decider.predict(prompt)

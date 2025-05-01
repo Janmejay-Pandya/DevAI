@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { User, Bot } from "lucide-react";
 import PropTypes from "prop-types";
+import ReactMarkdown from "react-markdown";
 
 const ChatMessage = ({ text, isUser, isLoading = false, is_choice, onChoiceSelect }) => (
   <motion.div
@@ -33,7 +34,9 @@ const ChatMessage = ({ text, isUser, isLoading = false, is_choice, onChoiceSelec
         </div>
       ) : (
         <div>
-          <span className="whitespace-pre-wrap break-words">{text}</span>
+          <span className="whitespace-pre-wrap break-words">
+            <ReactMarkdown>{text}</ReactMarkdown>
+          </span>
 
           {is_choice && (
             <div className="flex flex-col gap-2 mt-2 w-full">

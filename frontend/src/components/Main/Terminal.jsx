@@ -4,23 +4,43 @@ import { Terminal as TerminalIcon } from "lucide-react";
 const Terminal = () => {
   const [logs, setLogs] = useState([]);
   const terminalRef = useRef(null);
+  const websocketRef = useRef(null);
 
   useEffect(() => {
-    const simulateLogs = [
-      { type: "info", message: "Initializing application..." },
-      { type: "success", message: "Database connection established" },
-      { type: "warning", message: "Potential performance bottleneck detected" },
-      { type: "error", message: "Failed to load configuration file" },
-      { type: "info", message: "Starting background services..." },
-      { type: "success", message: "All services initialized successfully" },
-    ];
+    const apiUrl = import.meta.env.VITE_API_URL.replace(/^http/, "ws");
+    const socket = new WebSocket(`${apiUrl}/ws/terminal/`);
+    websocketRef.current = socket;
 
-    simulateLogs.forEach((log, index) => {
-      setTimeout(() => {
-        setLogs((prevLogs) => [...prevLogs, log]);
-      }, (index + 1) * 1000);
-    });
+    socket.onopen = () => {
+      console.log("Connected to terminal websocket");
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      const { time, type, category, message } = data;
+      console.log("recieved");
+
+      setLogs((prevLogs) => [...prevLogs, { time, type, category, message }]);
+    };
+
+    socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    socket.onclose = (event) => {
+      console.log("WebSocket closed:", event.reason);
+    };
+
+    return () => {
+      socket.close();
+    };
   }, []);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   const getLogColor = (type) => {
     switch (type) {
@@ -30,6 +50,8 @@ const Terminal = () => {
         return "text-yellow-500";
       case "success":
         return "text-green-500";
+      case "progress":
+        return "text-blue-400";
       default:
         return "text-white";
     }
@@ -48,8 +70,8 @@ const Terminal = () => {
         >
           {logs.map((log, index) => (
             <div key={index} className={`${getLogColor(log.type)} mb-1`}>
-              <span className="mr-2 text-gray-500">[{new Date().toLocaleTimeString()}]</span>
-              {log.message}
+              <span className="mr-2 text-gray-500">[{log.time}]</span>
+              {log.category}: {log.message}
             </div>
           ))}
         </div>

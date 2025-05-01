@@ -15,7 +15,7 @@ SECRET_KEY = "django-insecure-dg7#zw6ye(csx%qn$1ykw@9g4r-cm8r3^$$d&26xea=kjep5sd
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework",
     "corsheaders",
+    "channels",
     "projects",
     "users",
     "chat",
@@ -72,6 +73,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "dev_ai.urls"
+ASGI_APPLICATION = "dev_ai.asgi.application"
 
 TEMPLATES = [
     {
@@ -100,6 +102,19 @@ DATABASES = {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
     }
+
+    # 'default': {
+    #     'ENGINE': 'django.db.backends.postgresql',
+    #     'NAME': 'pbl-database-1',
+    #     'USER': 'postgres',
+    #     'PASSWORD': 'asdsadad',
+    #     'HOST': 'pbl-database-1.c7q6wmoogem9.ap-south-1.rds.amazonaws.com',
+    #     'PORT': '5432',
+    #     'OPTIONS': {
+    #         'sslmode': 'disable',
+    #         'connect_timeout': 15,
+    #     },
+    # }
 }
 
 

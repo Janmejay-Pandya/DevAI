@@ -78,12 +78,13 @@ class AssistantResponseView(APIView):
         user_message = request.data.get("message")
         is_choice = request.data.get("is_choice")
 
+        master_agent = MasterAgent(chat_id)
+        
         chat = get_object_or_404(Chat, id=chat_id, user=request.user)
         project_stage = Project.objects.get(chat=chat).current_step
         # echoing for now, will add agent response here
         # response_text = f"You said: {user_message}"
 
-        master_agent = MasterAgent(chat_id)
         response_text, is_seeking_approval = master_agent.handle_input(
             user_message, is_choice
         )
