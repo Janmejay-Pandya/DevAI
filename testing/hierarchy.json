@@ -1,0 +1,27 @@
+{
+  "layout": {
+    "type": "root",
+    "children": [
+      { "type": "row", "children": [{ "type": "Heading" }] },
+      {
+        "type": "row",
+        "children": [
+          { "type": "Paragraph" },
+          { "type": "Label" },
+          { "type": "Label" },
+          { "type": "Image" },
+          { "type": "Paragraph" },
+          { "type": "Label" },
+          { "type": "Paragraph" },
+          { "type": "Label" },
+          { "type": "Image" },
+          { "type": "Heading" },
+          { "type": "Paragraph" },
+          { "type": "Heading" },
+          { "type": "Label" },
+          { "type": "column", "children": [{ "type": "Image" }, { "type": "Label" }] }
+        ]
+      }
+    ]
+  }
+}

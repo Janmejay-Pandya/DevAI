@@ -1,8 +1,25 @@
 Folder PATH listing for volume Work
 Volume serial number is C622-46EB
-E:\PROGRAMMING-PROJECTS\PBL\BACKEND-DEVELOPER\CODEBASE\BACKEND
-    README.md
-    test.txt
-    
-No subfolders exist 
-
+E:\PROGRAMMING-PROJECTS\PBL\DEVAI\.HUSKY
+|   commit-msg
+|   pre-commit
+|   
+\---_
+        .gitignore
+        applypatch-msg
+        commit-msg
+        h
+        husky.sh
+        post-applypatch
+        post-checkout
+        post-commit
+        post-merge
+        post-rewrite
+        pre-applypatch
+        pre-auto-gc
+        pre-commit
+        pre-merge-commit
+        pre-push
+        pre-rebase
+        prepare-commit-msg
+        

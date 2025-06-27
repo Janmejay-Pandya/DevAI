@@ -1,0 +1,18 @@
+[
+  {
+    "command": "npm create vite@latest frontend -- --template react",
+    "description": "Initializing Frontend"
+  },
+  {
+    "command": "cd frontend",
+    "description": "Navigating to project folder"
+  },
+  {
+    "command": "npm install",
+    "description": "Installing dependencies"
+  },
+  {
+    "command": "npm install react-router-dom axios react-icons @heroicons/react prop-types lodash date-fns react-markdown",
+    "description": "Installing additional dependencies"
+  }
+]

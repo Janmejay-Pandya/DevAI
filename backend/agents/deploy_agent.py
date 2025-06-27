@@ -9,9 +9,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(BASE_DIR, "deployment_commands.json"), "r") as file:
     commands = json.load(file)
 
-project_dir = os.path.abspath(os.path.join(".", "code-environment"))
 
-async def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-repo-6"):
+async def deploy_to_github(github_username = "Miran-Firdausi", repo_name = "automated-repo-test", project_id=1):
+    project_dir = os.path.abspath(os.path.join(".", "code-environment", f"project{project_id}"))
+    
     for command_item in commands:
         try:
             raw_command = command_item["command"]

@@ -33,7 +33,6 @@ def generate_mvp_features(product_description):
     Focus only on essential features needed for a minimal but functional product.
     """
     response = llm_mvp_generator.predict(prompt)
-    print(response)
     return response
 
 # Debate on MVP features
@@ -50,8 +49,6 @@ def debate_mvp_features(feature_list):
         """
         critiques[role] = globals()[f"llm_{role.lower().replace(' ', '_')}"].predict(prompt)
 
-    print("********** Critiques from Different Perspectives **********")
-    print(critiques)
     return critiques
 
 # Finalize MVP after debate
@@ -62,6 +59,7 @@ def finalize_mvp(feature_list, critiques):
     And the critiques from different perspectives:
     {critiques}
     Refine the MVP feature list by keeping only the most important suggestions.
+    For simplicity minimize as much complexity as possible and keep it restricted to frontend only features with no outside dependencies.
     Output the final MVP features in a structured JSON format, as a list of string (functionalities).
     """
     final_mvp = llm_final_decision.predict(prompt)
@@ -74,6 +72,7 @@ def brainstorm_design_guidelines(product_description):
     Given the product description: "{product_description}", suggest design guidelines and themes.
     Include aspects like color palette, typography, and branding style.
     Do not include any unnecessary details or features. Just focus on design.
+    Do not give multiple options for a particular aspect. Just be direct with your choice with a short explaination why.
     """
     response = llm_design_brainstorm.predict(prompt)
     return response
@@ -84,6 +83,9 @@ def decide_tech_stack(product_description, final_mvp, design_guidelines):
     Given the product description: "{product_description}", the finalized MVP feature list: {final_mvp}, and the design guidelines: {design_guidelines},
     suggest the most suitable tech stack.
     Consider frontend and backend technologies, database choices, and scalability factors.
+    For frontend choices are either React with JS or HTML, CSS & JS.
+    For Backend We currently support Express.js
+    For database we can go with sqlite for development and later switch to a more robust database.
     Don't give options; just provide a single tech stack recommendation.
     """
     response = llm_techstack_decider.predict(prompt)
