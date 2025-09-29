@@ -1,0 +1,58 @@
+[
+  {
+    "command": "gh repo create {REPO} --public",
+    "description": "Creating GitHub Repo"
+  },
+  {
+    "command": "sleep 3",
+    "description": "Waiting for GitHub to process the repository"
+  },
+  {
+    "command": "git init -b main",
+    "description": "Initializing Git"
+  },
+  {
+    "command": "git remote add origin git@github.com:{USERNAME}/{REPO}.git",
+    "description": "Adding remote repository"
+  },
+  {
+    "command": "git add .",
+    "description": "Staging entire project"
+  },
+  {
+    "command": "git commit -m \"Initial Commit\"",
+    "description": "Committing full project"
+  },
+  {
+    "command": "git push -u origin main",
+    "description": "Pushing code to GitHub"
+  },
+  {
+    "command": "cd frontend && npm install && npm run build",
+    "description": "Building React project"
+  },
+  {
+    "command": "git checkout --orphan gh-pages",
+    "description": "Creating orphan branch for GitHub Pages"
+  },
+  {
+    "command": "git --work-tree=frontend/dist add --all",
+    "description": "Adding build output (dist folder)"
+  },
+  {
+    "command": "git --work-tree=frontend/dist commit -m \"Deploy to gh-pages\"",
+    "description": "Committing build output"
+  },
+  {
+    "command": "git push origin HEAD:gh-pages --force",
+    "description": "Pushing to gh-pages branch"
+  },
+  {
+    "command": "git checkout main",
+    "description": "Switching back to main branch"
+  },
+  {
+    "command": "gh api -H 'Accept: application/vnd.github+json' repos/{USERNAME}/{REPO}/pages -f source[branch]=gh-pages -f source[path]=/",
+    "description": "Enabling GitHub Pages from gh-pages branch"
+  }
+]

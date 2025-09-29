@@ -43,16 +43,20 @@ const Main = () => {
         </div>
 
         {/* View rendering */}
-        <div className="flex-grow">
-          {rightView === "preview" && <Preview />}
-          {rightView === "terminal" && <Terminal />}
-          {rightView === "code" && (
+        <div className="flex-grow relative">
+          <div className={`${rightView === "preview" ? "block" : "hidden"} absolute inset-0`}>
+            <Preview />
+          </div>
+          <div className={`${rightView === "terminal" ? "block" : "hidden"} absolute inset-0`}>
+            <Terminal />
+          </div>
+          <div className={`${rightView === "code" ? "block" : "hidden"} absolute inset-0`}>
             <iframe
-              src="http://127.0.0.1:8080/?folder=/tmp/code-environment"
+              src="http://127.0.0.1:8080"
               title="Code Environment"
               className="w-full h-full border-none"
             />
-          )}
+          </div>
         </div>
       </div>
     </div>

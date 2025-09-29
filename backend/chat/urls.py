@@ -5,7 +5,7 @@ urlpatterns = [
     # Chat endpoints
     path("chats/", views.ChatListCreateView.as_view(), name="chat-list-create"),
     path(
-        "chats/<int:chat_pk>/messages/",
+        "<int:chat_pk>/messages/",
         views.MessageListCreateView.as_view(),
         name="message-list-create",
     ),

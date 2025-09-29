@@ -1,5 +1,5 @@
+import os
 from datetime import timedelta
-
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -29,10 +29,12 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework",
     "corsheaders",
+    "sketch2code",
     "channels",
     "projects",
     "users",
     "chat",
+    "designer"
 ]
 
 REST_FRAMEWORK = {
@@ -102,7 +104,6 @@ DATABASES = {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
     }
-
     # 'default': {
     #     'ENGINE': 'django.db.backends.postgresql',
     #     'NAME': 'pbl-database-1',
@@ -161,3 +162,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")

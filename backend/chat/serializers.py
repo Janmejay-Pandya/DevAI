@@ -45,7 +45,7 @@ class ChatSerializer(serializers.ModelSerializer):
         last_message = obj.messages.last()
         if last_message:
             return {
-                "content": last_message.content[:50],
+                "content": last_message.content,
                 "sender": last_message.sender,
                 "created_at": last_message.created_at,
             }

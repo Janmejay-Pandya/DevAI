@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import { API_ENDPOINTS } from "../constants";
+import { setCurrentChatId } from "../store/slices/chatSlice";
 import api from "../api";
 
 const NewProject = () => {
   const [idea, setIdea] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const dispatch = useDispatch();
 
   const navigate = useNavigate();
 
@@ -29,22 +32,16 @@ const NewProject = () => {
         title: idea,
       });
 
-      localStorage.setItem("currentChatId", response.data.id);
+      const chatId = response.data.id;
+      localStorage.setItem("currentChatId", chatId);
+      dispatch(setCurrentChatId(chatId));
 
       // Initialize with user request
       //   setMessages([{ text: idea, isUser: true }]);
 
-      await api.post(API_ENDPOINTS.MESSAGES(response.data.id), {
-        content: "I want to create " + idea,
-        sender: "user",
+      navigate("/", {
+        state: { initialMessage: "I want to create " + idea },
       });
-
-      await api.post(API_ENDPOINTS.ASSISTANT_RESPOND, {
-        chat_id: response.data.id,
-        message: idea,
-      });
-
-      navigate("/");
     } catch (err) {
       console.error("Error creating new project:", err);
     }

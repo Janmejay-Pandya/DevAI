@@ -61,7 +61,7 @@ ChatMessage.propTypes = {
   text: PropTypes.string.isRequired,
   isUser: PropTypes.bool.isRequired,
   isLoading: PropTypes.bool,
-  is_choice: PropTypes.array,
+  is_choice: PropTypes.bool,
   onChoiceSelect: PropTypes.func,
 };
 

@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 import asyncio
 
+
 class TerminalLogger:
     _websocket = None
 
