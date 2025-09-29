@@ -1,6 +1,7 @@
 from channels.generic.websocket import AsyncWebsocketConsumer
 from utils.terminal_utils import TerminalLogger
 
+
 class TerminalConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()

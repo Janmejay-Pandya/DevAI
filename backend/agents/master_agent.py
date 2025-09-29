@@ -17,10 +17,15 @@ from .frontend_agent import generate_frontend, structure_frontend_requests
 from .deploy_agent import deploy_to_github
 from utils.github_utils import github_user_exists, github_repo_exists
 from utils.text_utils import extract_json_from_text, extract_prompt_list
-from .prompts import INTERPRETER_SYSTEM_PROMPT, ANSWER_USER_QUERY_PROMPT, CODE_PLANNER_PROMPT 
+from .prompts import (
+    INTERPRETER_SYSTEM_PROMPT,
+    ANSWER_USER_QUERY_PROMPT,
+    CODE_PLANNER_PROMPT,
+)
 import time
 
 load_dotenv(find_dotenv(), override=True)
+
 
 class MasterAgent:
     def __init__(self, chat_id: int):
@@ -28,8 +33,30 @@ class MasterAgent:
         self.project, _ = Project.objects.get_or_create(chat=self.chat)
 
     def handle_input(self, user_input: str) -> Tuple[str, bool]:
-        yes_terms = {"yes", "y", "yeah", "yep", "sure", "absolutely", "certainly", "of course", "ok", "okay", "alright"}
-        no_terms = {"no", "n", "nope", "nah", "never", "not at all", "negative", "no way", "absolutely not"}
+        yes_terms = {
+            "yes",
+            "y",
+            "yeah",
+            "yep",
+            "sure",
+            "absolutely",
+            "certainly",
+            "of course",
+            "ok",
+            "okay",
+            "alright",
+        }
+        no_terms = {
+            "no",
+            "n",
+            "nope",
+            "nah",
+            "never",
+            "not at all",
+            "negative",
+            "no way",
+            "absolutely not",
+        }
 
         if user_input.lower() in yes_terms:
             intent = {"intent": "approve"}
@@ -37,10 +64,15 @@ class MasterAgent:
             intent = {"intent": "reject"}
         else:
             # We can improve it by adding a form instead
-            if self.project.current_step == "deploy" and (self.project.github_username is None or self.project.github_repo_name is None):
+            if self.project.current_step == "deploy" and (
+                self.project.github_username is None
+                or self.project.github_repo_name is None
+            ):
                 intent = {"intent": "details"}
             else:
-                last_assistant_msg = self.chat.messages.filter(sender="assistant").last()
+                last_assistant_msg = self.chat.messages.filter(
+                    sender="assistant"
+                ).last()
                 last_msg = last_assistant_msg.content if last_assistant_msg else "None"
                 project_context = {
                     "current_step": self.project.current_step,
@@ -54,7 +86,10 @@ class MasterAgent:
 
         # Handle incomplete input
         if intent["intent"] == "incomplete":
-            return ("I couldn't understand that. Could you please rephrase it clearly?", False)
+            return (
+                "I couldn't understand that. Could you please rephrase it clearly?",
+                False,
+            )
 
         if intent["intent"] == "question":
             project_context = {
@@ -66,7 +101,9 @@ class MasterAgent:
                 "tech_stack": self.project.tech_stack,
                 "deployed_url": self.project.deployed_url,
             }
-            response = self._answer_user_query(intent.get("request", ""), project_context)
+            response = self._answer_user_query(
+                intent.get("request", ""), project_context
+            )
             return (response, False)
 
         # Handle going back to previous step (can be used anywhere in the flow)
@@ -75,9 +112,15 @@ class MasterAgent:
             if target_step and target_step in [choice.value for choice in AgentSteps]:
                 self.project.current_step = target_step
                 self.project.save()
-                return (f"Alright, taking you back to the {target_step.replace('_', ' ').title()} stage.", True)
+                return (
+                    f"Alright, taking you back to the {target_step.replace('_', ' ').title()} stage.",
+                    True,
+                )
             else:
-                return ("Sorry, I couldn't understand which stage to go back to.", False)
+                return (
+                    "Sorry, I couldn't understand which stage to go back to.",
+                    False,
+                )
 
         # Handle each step's specific logic
         if step == "init":
@@ -130,20 +173,23 @@ class MasterAgent:
                 self.project.save()
                 return (
                     f"Got your product description. You want to make {self.project.product_description}. Should we proceed to the next stage?",
-                    True
+                    True,
                 )
             else:
-                return ("Please provide a description of what you'd like to create so that we can move forward", False)
-            
+                return (
+                    "Please provide a description of what you'd like to create so that we can move forward",
+                    False,
+                )
+
         if intent["intent"] == "approve":
             # Update step and proceed directly to generating MVP
             self.project.current_step = "generate_mvp"
             self.project.save()
-            
+
             # Generate MVP immediately
             generated_mvp_response = self._handle_generate_mvp()
             return generated_mvp_response
-            
+
         elif intent["intent"] == "reject":
             self.project.product_description = None
             return (
@@ -151,7 +197,10 @@ class MasterAgent:
                 False,
             )
         else:
-            return ("Please confirm if you want to proceed with this product idea.", True)
+            return (
+                "Please confirm if you want to proceed with this product idea.",
+                True,
+            )
 
     def _handle_generate_mvp(self, intent=None):
         if not self.project.mvp:
@@ -163,11 +212,11 @@ class MasterAgent:
                 f"Here are the MVP features I've generated:\n\n{mvp}\n\nDo you want to see critiques of these features?",
                 True,
             )
-        if intent["intent"] == "approve":                
+        if intent["intent"] == "approve":
             # Move to debate phase
             self.project.current_step = "debate"
             self.project.save()
-            
+
             generated_critiques_response = self._handle_debate()
             return generated_critiques_response
         elif intent["intent"] == "reject":
@@ -184,7 +233,7 @@ class MasterAgent:
         elif intent["intent"] == "modify":
             # Handle requested modifications
             modify_mvp_request = intent.get("request", "")
-            
+
             # TODO: Generate new MVP based on modified description
             mvp = self._generate_mvp()
             self.project.mvp = mvp
@@ -201,7 +250,7 @@ class MasterAgent:
             critiques = self._debate()
             self.project.critiques = critiques
             self.project.save()
-            
+
             return (
                 f"Here's what each agent thinks:\n{critiques}\n\nBased on these critiques, should we update the MVP features?",
                 True,
@@ -224,10 +273,10 @@ class MasterAgent:
             # Handle modification and then generate critiques
             modified_mvp = self._update_mvp(intent.get("request", ""))
             self.project.mvp = modified_mvp
-            
+
             critiques = self._debate()
             self.project.critiques = critiques
-            self.project.save()          
+            self.project.save()
             return (
                 f"Updated MVP features and generated critiques:\n{critiques}\n\nBased on these critiques, should we update the MVP features?",
                 True,
@@ -242,16 +291,16 @@ class MasterAgent:
         if not self.project.final_mvp:
             final_mvp = self._finalize_mvp()
             self.project.final_mvp = final_mvp
-            
+
             # Move to design step
             self.project.current_step = "design"
             self.project.save()
-            
+
             # Generate design guidelines immediately
             design = self._generate_design()
             self.project.design_guidelines = design
             self.project.save()
-            
+
             # Return finalized MVP and design in one step
             return (
                 f"{final_mvp}\n\nBased on this MVP, I've created these design guidelines:\n{design}\n\nShould I recommend a tech stack for implementation?",
@@ -268,15 +317,15 @@ class MasterAgent:
             # Handle modifications and then finalize MVP
             modified_mvp = self._update_mvp_with_feedback(intent.get("request", ""))
             self.project.final_mvp = modified_mvp
-            
+
             # Move to design and generate it
             self.project.current_step = "design"
             self.project.save()
-            
+
             design = self._generate_design()
             self.project.design_guidelines = design
             self.project.save()
-            
+
             return (
                 f"Updated and finalized MVP:\n{modified_mvp}\n\nBased on this, I've created these design guidelines:\n{design}\n\nShould I recommend a tech stack for implementation?",
                 True,
@@ -295,15 +344,15 @@ class MasterAgent:
                 self.project.design_guidelines = design
             else:
                 design = self.project.design_guidelines
-            
+
             # Move to tech stack and generate it immediately
             self.project.current_step = "tech_stack"
             self.project.save()
-            
+
             stack = self._generate_tech_stack()
             self.project.tech_stack = stack
             self.project.save()
-            
+
             return (
                 f"Design guidelines confirmed.\n\nRecommended Tech Stack:\n{stack}\n\nIdeation and Design Completed. Ready to start development?",
                 True,
@@ -317,20 +366,23 @@ class MasterAgent:
             # Handle design modifications then generate tech stack
             modified_design = self._update_design(intent.get("request", ""))
             self.project.design_guidelines = modified_design
-            
+
             self.project.current_step = "tech_stack"
             self.project.save()
-            
+
             stack = self._generate_tech_stack()
             self.project.tech_stack = stack
             self.project.save()
-            
+
             return (
                 f"Updated design guidelines:\n{modified_design}\n\nRecommended Tech Stack:\n{stack}\n\nReady to start development?",
                 True,
             )
         else:
-            return ("Please confirm if you want me to generate design guidelines.", True)
+            return (
+                "Please confirm if you want me to generate design guidelines.",
+                True,
+            )
 
     def _handle_tech_stack(self, intent):
         if intent["intent"] == "approve":
@@ -340,12 +392,12 @@ class MasterAgent:
                 self.project.tech_stack = stack
             else:
                 stack = self.project.tech_stack
-            
+
             # Move to development phase
             self.project.current_step = "development"
             self.project.save()
-            
-            # Start development automatically            
+
+            # Start development automatically
             return (
                 f"Tech stack confirmed.\n\nDevelopment has started. Would you like to see the progress or suggest any changes?",
                 True,
@@ -359,10 +411,10 @@ class MasterAgent:
             # Handle tech stack modifications and move to development
             modified_stack = self._update_tech_stack(intent.get("request", ""))
             self.project.tech_stack = modified_stack
-            
+
             self.project.current_step = "development"
             self.project.save()
-                        
+
             return (
                 f"Updated tech stack:\n{modified_stack}\n\nDevelopment has started. Would you like to see progress or begin testing the application?",
                 True,
@@ -375,18 +427,18 @@ class MasterAgent:
             prompts = structure_frontend_requests(
                 description=self.project.product_description,
                 mvp=self.project.final_mvp,
-                design_guidelines=self.project.design_guidelines
+                design_guidelines=self.project.design_guidelines,
             )
-            
+
             for p in prompts:
                 time.sleep(2)
                 async_to_sync(generate_frontend)(p)
                 # async_to_sync(generate_frontend)("A note taking app. use font roboto. make the theme of website green and white")
-            
+
             # Simulate development completion and immediately start testing
             test_results = "No test cases available."
             self.project.test_results = test_results
-            
+
             return (
                 f"Development complete! I've implemented all the features according to the specifications.\n\nTesting Results:\n{test_results}\n\nTesting skipped. Should we move to the next stage?",
                 True,
@@ -399,13 +451,13 @@ class MasterAgent:
         elif intent["intent"] == "modify":
             # Handle the modification, then move to testing phase
             updated_frontend = self._update_frontend(intent.get("request", ""))
-            
+
             self.project.current_step = "test"
             self.project.save()
-            
+
             test_results = "All core functionality tests passed. UI rendering tests passed. Performance benchmarks met."
             self.project.test_results = test_results
-            
+
             return (
                 f"I've made the suggested changes and completed development.\n\nTesting Results:\n{test_results}\n\nAll tests passed successfully. Should we deploy the application now?",
                 True,
@@ -414,23 +466,26 @@ class MasterAgent:
             # User indicates development is complete, move to testing
             self.project.current_step = "test"
             self.project.save()
-            
+
             test_results = "All core functionality tests passed. UI rendering tests passed. Performance benchmarks met."
             self.project.test_results = test_results
-            
+
             return (
                 f"Great! Testing has been completed.\n\nTesting Results:\n{test_results}\n\nAll tests passed successfully. Should we deploy the application now?",
                 True,
             )
         else:
-            return ("Please confirm if you're ready to start the development phase.", True)
+            return (
+                "Please confirm if you're ready to start the development phase.",
+                True,
+            )
 
     def _handle_test(self, intent):
         if intent["intent"] == "approve":
             # Move to deployment phase
             self.project.current_step = "deploy"
             self.project.save()
-            
+
             return (
                 f"The application is ready to be deployed. Should we proceed with deployment?",
                 True,
@@ -445,21 +500,26 @@ class MasterAgent:
         elif intent["intent"] == "modify":
             # Handle test modifications, then advance to deployment
             # Simulate addressing test issues
-            updated_test_results = "All test cases now passing after addressing the issues you mentioned."
+            updated_test_results = (
+                "All test cases now passing after addressing the issues you mentioned."
+            )
             # self.project.test_results = updated_test_results
-            
+
             self.project.current_step = "deploy"
             self.project.save()
-            
+
             deployment_details = "Application packaged for deployment."
             self.project.deployment_details = deployment_details
-            
+
             return (
                 f"I've addressed your testing concerns.\n\nUpdated Test Results:\n{updated_test_results}\n\nDeployment Preparation:\n{deployment_details}\n\nThe application is ready to be deployed. Should we proceed with deployment?",
                 True,
             )
         else:
-            return ("Please confirm if we should proceed with testing the application.", True)
+            return (
+                "Please confirm if we should proceed with testing the application.",
+                True,
+            )
 
     def _handle_deploy(self, intent, user_input):
         if self.project.github_username is None:
@@ -473,16 +533,25 @@ class MasterAgent:
         # Handle GitHub username collection
         if self.project.github_username is None:
             if not github_user_exists(user_input):
-                return ("I couldn't find that GitHub user. Please double-check and send the correct username.", False)
+                return (
+                    "I couldn't find that GitHub user. Please double-check and send the correct username.",
+                    False,
+                )
             else:
                 self.project.github_username = user_input
                 self.project.save()
-                return ("Great! Now, please provide a **new** repository name (make sure it doesn't already exist):", False)
+                return (
+                    "Great! Now, please provide a **new** repository name (make sure it doesn't already exist):",
+                    False,
+                )
 
         # Handle GitHub repo name collection
         if self.project.github_repo_name is None:
             if github_repo_exists(self.project.github_username, user_input):
-                return (f"⚠️ A repository named '{user_input}' already exists under your account. Please choose a different repository name.", False)
+                return (
+                    f"⚠️ A repository named '{user_input}' already exists under your account. Please choose a different repository name.",
+                    False,
+                )
             else:
                 self.project.github_repo_name = user_input
                 self.project.save()
@@ -494,8 +563,11 @@ class MasterAgent:
         # Usual deployment flows here
         if intent["intent"] == "approve":
             # Execute actual deployment
-            async_to_sync(deploy_to_github)(github_username=self.project.github_username, repo_name=self.project.github_repo_name)
-            
+            async_to_sync(deploy_to_github)(
+                github_username=self.project.github_username,
+                repo_name=self.project.github_repo_name,
+            )
+
             # Update to completed state immediately
             self.project.current_step = "complete"
             self.project.deployed_url = f"https://{self.project.github_username}.github.io/{self.project.github_repo_name}/"
@@ -513,7 +585,7 @@ class MasterAgent:
         elif intent["intent"] == "modify":
             # Handle modifications then deploy
             # Implement any requested modifications to deployment settings
-            
+
             # Then deploy with updated settings
             # async_to_sync(deploy_to_github)(github_username=self.project.github_username, repo_name=self.project.github_repo_name)
 
@@ -534,18 +606,21 @@ class MasterAgent:
         elif intent["intent"] == "reject":
             # User is satisfied with the project as-is
             return (
-                "Thank you for completing your project with us! Your application is now live at " + 
-                f"{self.project.deployed_url}\n\nFeel free to start a new project anytime. Bye!",
+                "Thank you for completing your project with us! Your application is now live at "
+                + f"{self.project.deployed_url}\n\nFeel free to start a new project anytime. Bye!",
                 False,
             )
         elif intent["intent"] == "modify":
             # Handle specific post-deployment modifications
             # This could trigger specific modification functions based on what the user requested
-            
+
             # For example:
             updated_app = self._apply_post_deployment_changes(intent.get("request", ""))
-            redeploy_to_github(github_username=self.project.github_username, repo_name=self.project.github_repo_name)
-            
+            redeploy_to_github(
+                github_username=self.project.github_username,
+                repo_name=self.project.github_repo_name,
+            )
+
             return (
                 f"I've applied your suggested changes and redeployed the application. The updated version is now live at {self.project.deployed_url}\n\nIs there anything else you'd like to modify?",
                 True,
@@ -555,7 +630,7 @@ class MasterAgent:
                 "Your application is complete and deployed. Would you like to make any changes or improvements?",
                 True,
             )
-            
+
     # Helper methods for LLM-based generation
     def _generate_mvp(self):
         """Generate MVP features based on product description using LLM"""
@@ -597,7 +672,11 @@ class MasterAgent:
 
     def _generate_tech_stack(self):
         """Generate tech stack recommendations"""
-        return decide_tech_stack(self.project.product_description, self.project.final_mvp, self.project.design_guidelines)
+        return decide_tech_stack(
+            self.project.product_description,
+            self.project.final_mvp,
+            self.project.design_guidelines,
+        )
         # return "\n- Frontend: React.js with Tailwind CSS\n- Backend: Node.js with Express\n- Database: MongoDB\n- Authentication: JWT\n- Deployment: GitHub Pages"
 
     def _update_tech_stack(self, user_feedback):
@@ -617,14 +696,20 @@ class MasterAgent:
         # In a real implementation, this would update the GitHub repository
         return True  # Mock implementation
 
-    def _interpret_feedback(self, feedback: str, last_question: str = "", project_context: dict = None) -> dict:
+    def _interpret_feedback(
+        self, feedback: str, last_question: str = "", project_context: dict = None
+    ) -> dict:
         prompt = INTERPRETER_SYSTEM_PROMPT.format(
             feedback=feedback.strip(),
             last_question=last_question.strip(),
-            project_context=json.dumps(project_context, indent=2)
+            project_context=json.dumps(project_context, indent=2),
         )
 
-        interpreter_llm = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"),model="gemini-1.5-flash", temperature=0.7)
+        interpreter_llm = ChatGoogleGenerativeAI(
+            google_api_key=os.getenv("GOOGLE_API_KEY"),
+            model="gemini-1.5-flash",
+            temperature=0.7,
+        )
         response = interpreter_llm.predict(prompt)
 
         try:
@@ -648,8 +733,7 @@ class MasterAgent:
         context_str = json.dumps(context, indent=2)
 
         prompt = ANSWER_USER_QUERY_PROMPT.format(
-            user_query=query.strip(),
-            project_context=context_str
+            user_query=query.strip(), project_context=context_str
         )
 
         llm = ChatGoogleGenerativeAI(

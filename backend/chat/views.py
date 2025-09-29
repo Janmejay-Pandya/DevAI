@@ -1,3 +1,4 @@
+from asgiref.sync import async_to_sync
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.views import APIView
@@ -6,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import Chat, Message
 from .serializers import ChatSerializer, MessageSerializer, UserSerializer
 from django.contrib.auth.models import User
-from agents.master_agent import MasterAgent
+from agents.new_master_agent import MasterAgent
 from projects.models import Project
 
 # # for testing!!!! must remove later!!!!!
@@ -79,19 +80,14 @@ class AssistantResponseView(APIView):
         is_choice = request.data.get("is_choice")
 
         master_agent = MasterAgent(chat_id)
-        
+
+        # You can run the async method from sync context like this:
+        async_to_sync(master_agent.handle_input)(user_message)
+
         chat = get_object_or_404(Chat, id=chat_id, user=request.user)
         project_stage = Project.objects.get(chat=chat).current_step
-        # echoing for now, will add agent response here
-        # response_text = f"You said: {user_message}"
-
-        response_text, is_seeking_approval = master_agent.handle_input(
-            user_message, is_choice
-        )
-
-        Message.objects.create(chat=chat, sender="assistant", content=response_text)
 
         return Response(
-            {"response": response_text, "is_seeking_approval": is_seeking_approval, "project_stage": project_stage},
+            {"project_stage": project_stage},
             status=status.HTTP_200_OK,
         )

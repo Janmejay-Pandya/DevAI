@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
@@ -6,6 +7,10 @@ import api from "../../api";
 import { API_ENDPOINTS } from "../../constants";
 import { setStage } from "../../store/slices/projectSlice";
 import { setCurrentChatId } from "../../store/slices/chatSlice";
+import ColorPickerInput from "./ColorPickerInput";
+import SketchCanvas from "./SketchCanvas";
+
+let socket;
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
@@ -15,6 +20,9 @@ const Chat = () => {
   const currentChatId = useSelector((state) => state.chat.currentChatId);
   const dispatch = useDispatch();
 
+  const location = useLocation();
+  const initialMessage = location.state?.initialMessage;
+
   useEffect(() => {
     const initializeChat = async () => {
       try {
@@ -22,27 +30,20 @@ const Chat = () => {
 
         if (savedChatId) {
           dispatch(setCurrentChatId(savedChatId));
-          try {
-            const response = await api.get(API_ENDPOINTS.MESSAGES(savedChatId));
-            setMessages(
-              response.data.map((msg) => ({
-                text: msg.content,
-                isUser: msg.sender !== "assistant",
-              })),
-            );
-          } catch (err) {
-            // If we can't load messages for the saved chat, create a new one
-            console.warn("Couldn't load saved chat, creating a new one");
-            createNewChat();
-          }
+          const response = await api.get(API_ENDPOINTS.MESSAGES(savedChatId));
+          setMessages(
+            response.data.map((msg) => ({
+              text: msg.content,
+              isUser: msg.sender !== "assistant",
+            })),
+          );
+          setupWebSocket(savedChatId);
         } else {
-          // No saved chat, create a new one
           createNewChat();
         }
-      } catch (error) {
-        console.error("Error initializing chat:", error);
-        setError("Could not connect to chat service");
-        // Fallback welcome message
+      } catch (err) {
+        console.error("Chat init error:", err);
+        setError("Unable to connect to chat.");
         setMessages([{ text: "Hello! How can I assist you today?", isUser: false }]);
       }
     };
@@ -55,157 +56,142 @@ const Chat = () => {
 
         dispatch(setCurrentChatId(response.data.id));
         localStorage.setItem("currentChatId", response.data.id);
-
-        // Initialize with welcome message
         setMessages([{ text: "Hello! How can I assist you today?", isUser: false }]);
 
-        // Save welcome message to database
         await api.post(API_ENDPOINTS.MESSAGES(response.data.id), {
           content: "Hello! How can I assist you today?",
           sender: "assistant",
         });
+
+        setupWebSocket(response.data.id);
       } catch (err) {
-        console.error("Error creating new chat:", err);
-        setError("Could not create a new chat");
+        console.error("New chat creation failed:", err);
+        setError("Could not create a new chat.");
       }
     };
 
     initializeChat();
+    return () => {
+      if (socket) socket.close();
+    };
   }, []);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // 👇 Establish websocket connection
+  const setupWebSocket = (chatId) => {
+    const token = localStorage.getItem("access");
+    const wsUrl = `ws://127.0.0.1:8000/ws/chat/${chatId}/?token=${token}`;
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log("WebSocket connected");
+      if (initialMessage) {
+        handleSend(initialMessage);
+        window.history.replaceState({}, document.title);
+      }
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log("WS Message", data);
+      setMessages((prev) => [
+        ...prev.filter((msg) => !msg.isLoading),
+        {
+          text: data.response,
+          isUser: false,
+          isSeekingApproval: data.is_seeking_approval,
+        },
+      ]);
+      setIsLoading(false);
+      if (data.project_stage) {
+        dispatch(setStage(data.project_stage));
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.error("WebSocket error", err);
+      setError("WebSocket error");
+    };
+
+    socket.onclose = () => {
+      console.log("WebSocket closed");
+    };
+  };
 
   const handleSend = async (text) => {
     if (!text.trim()) return;
-
-    // Update UI immediately
     setMessages((prev) => [...prev, { text, isUser: true }]);
-    // Clear choices if user manually types
-    setMessages((prev) =>
-      prev.map((msg) => ({
-        ...msg,
-        isSeekingApproval: false,
-      })),
-    );
+    setMessages((prev) => prev.map((msg) => ({ ...msg, isSeekingApproval: false })));
     setIsLoading(true);
 
-    try {
-      // Save user message to database
-      await api.post(API_ENDPOINTS.MESSAGES(currentChatId), {
-        content: text,
-        sender: "user",
-      });
+    setMessages((prev) => [...prev, { text: "Thinking...", isUser: false, isLoading: true }]);
 
-      // Show thinking indicator
-      setMessages((prev) => [...prev, { text: "Thinking...", isUser: false, isLoading: true }]);
+    const response = await api.post(API_ENDPOINTS.MESSAGES(currentChatId), {
+      content: text,
+      sender: "user",
+    });
+    console.log(currentChatId);
+    console.log("API response:", response);
+    console.log("sent message to store" + text);
 
-      // Get assistant response
-      const response = await api.post(API_ENDPOINTS.ASSISTANT_RESPOND, {
-        chat_id: currentChatId,
-        message: text,
-      });
-
-      // Update messages with assistant response
-      setMessages((prev) => {
-        const filtered = prev.filter((msg) => !msg.isLoading);
-        return [
-          ...filtered,
-          {
-            text: response.data.response,
-            isUser: false,
-            isSeekingApproval: response.data.is_seeking_approval,
-          },
-        ];
-      });
-
-      // No need to save assistant response as the backend should already do this
-    } catch (error) {
-      console.error("Error sending message:", error);
-      setError("Failed to send message");
-
-      // Show error message
-      setMessages((prev) => {
-        const filtered = prev.filter((msg) => !msg.isLoading);
-        return [
-          ...filtered,
-          { text: "Sorry, I couldn't process your message. Please try again.", isUser: false },
-        ];
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Send message over WebSocket
+    socket.send(JSON.stringify({ content: text }));
   };
 
   const handleChoice = async (choiceText) => {
     if (!choiceText.trim()) return;
-
-    // Remove all pending choices immediately
-    setMessages((prev) =>
-      prev.map((msg) => ({
-        ...msg,
-        isSeekingApproval: false,
-      })),
-    );
-
+    setMessages((prev) => prev.map((msg) => ({ ...msg, isSeekingApproval: false })));
     setMessages((prev) => [...prev, { text: choiceText, isUser: true }]);
     setIsLoading(true);
 
-    try {
-      // Save choice message to database
-      await api.post(API_ENDPOINTS.MESSAGES(currentChatId), {
-        content: choiceText,
-        sender: "user",
-      });
+    await api.post(API_ENDPOINTS.MESSAGES(currentChatId), {
+      content: choiceText,
+      sender: "user",
+    });
 
-      // Show thinking...
-      setMessages((prev) => [...prev, { text: "Thinking...", isUser: false, isLoading: true }]);
+    setMessages((prev) => [...prev, { text: "Thinking...", isUser: false, isLoading: true }]);
 
-      // Get assistant's new response
-      const response = await api.post(API_ENDPOINTS.ASSISTANT_RESPOND, {
-        chat_id: currentChatId,
-        message: choiceText,
-        is_choice: true,
-      });
-
-      if (response.data.project_stage) {
-        dispatch(setStage(response.data.project_stage));
-      }
-
-      setMessages((prev) => {
-        const filtered = prev.filter((msg) => !msg.isLoading);
-        return [
-          ...filtered,
-          {
-            text: response.data.response,
-            isUser: false,
-            isSeekingApproval: response.data.is_seeking_approval,
-          },
-        ];
-      });
-    } catch (error) {
-      console.error("Error sending choice:", error);
-      setError("Failed to process choice");
-
-      setMessages((prev) => {
-        const filtered = prev.filter((msg) => !msg.isLoading);
-        return [
-          ...filtered,
-          { text: "Sorry, I couldn't process your choice. Please try again.", isUser: false },
-        ];
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Send choice over WebSocket
+    socket.send(JSON.stringify({ content: choiceText }));
   };
+
+  const handleColorSelect = async (colorData) => {
+    const colorText = `Selected color: ${colorData.hex} (RGB: ${colorData.rgb.r}, ${colorData.rgb.g}, ${colorData.rgb.b})`;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        text: colorText,
+        isUser: true,
+        colorData: colorData, // Store color data for visual representation
+      },
+    ]);
+
+    setMessages((prev) => prev.map((msg) => ({ ...msg, isSeekingApproval: false })));
+    setIsLoading(true);
+
+    await api.post(API_ENDPOINTS.MESSAGES(currentChatId), {
+      content: colorText,
+      sender: "user",
+    });
+
+    setMessages((prev) => [...prev, { text: "Thinking...", isUser: false, isLoading: true }]);
+
+    // Send color selection over WebSocket
+    socket.send(
+      JSON.stringify({
+        content: colorText,
+        color_data: colorData, // Send structured color data
+      }),
+    );
+  };
+
+  const [showCanvas, setShowCanvas] = useState(false);
 
   return (
     <div className="flex flex-col h-full bg-gray-100 mx-auto">
       <div className="flex justify-center items-center p-2 bg-white border-b border-gray-300">
         <div className="font-medium">Project {currentChatId ? `#${currentChatId}` : ""}</div>
       </div>
-
       {error && (
         <div className="bg-red-100 p-2 text-red-700 text-sm">
           {error}
@@ -214,7 +200,6 @@ const Chat = () => {
           </button>
         </div>
       )}
-
       <div className="flex-1 overflow-y-auto p-4">
         {messages.map((msg, index) => (
           <ChatMessage
@@ -227,8 +212,30 @@ const Chat = () => {
           />
         ))}
         <div ref={messagesEndRef} />
+        {/* {true && (
+          <ColorPickerInput
+            onColorSelect={handleColorSelect}
+            onTextSend={handleSend}
+            disabled={isLoading}
+          />
+        )} */}
       </div>
-
+      <div>
+        <button
+          className="m-2 px-4 py-2 bg-blue-500 text-white rounded"
+          onClick={() => setShowCanvas(true)}
+        >
+          Design
+        </button>
+      </div>
+      {showCanvas && (
+        <SketchCanvas
+          open={showCanvas}
+          onClose={() => {
+            setShowCanvas(false);
+          }}
+        />
+      )}
       <ChatInput onSend={handleSend} disabled={isLoading} />
     </div>
   );

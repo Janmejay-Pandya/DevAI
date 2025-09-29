@@ -1,7 +1,11 @@
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv, find_dotenv
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain.prompts import (
+    ChatPromptTemplate,
+    SystemMessagePromptTemplate,
+    HumanMessagePromptTemplate,
+)
 from langchain.prompts.chat import MessagesPlaceholder
 from langchain.schema import SystemMessage, HumanMessage
 from langchain.agents import initialize_agent, AgentType
@@ -11,20 +15,49 @@ from langchain.memory import ConversationBufferMemory
 load_dotenv(find_dotenv(), override=True)
 
 # Initialize multiple LLMs for debate
-llm_mvp_generator = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"),model="gemini-1.5-flash", temperature=0.7)
-llm_minimalist = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"), model="gemini-1.5-flash", temperature=0.8)
-llm_scalability_advocate = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"), model="gemini-1.5-flash", temperature=0.8)
-llm_ux_focus = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"), model="gemini-1.5-flash", temperature=0.8)
-llm_final_decision = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"), model="gemini-1.5-flash", temperature=0.6)
-llm_design_brainstorm = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"), model="gemini-1.5-flash", temperature=0.6)
-llm_techstack_decider = ChatGoogleGenerativeAI(google_api_key=os.getenv("GOOGLE_API_KEY"), model="gemini-1.5-flash", temperature=0.7)
+llm_mvp_generator = ChatGoogleGenerativeAI(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-1.5-flash",
+    temperature=0.7,
+)
+llm_minimalist = ChatGoogleGenerativeAI(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-1.5-flash",
+    temperature=0.8,
+)
+llm_scalability_advocate = ChatGoogleGenerativeAI(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-1.5-flash",
+    temperature=0.8,
+)
+llm_ux_focus = ChatGoogleGenerativeAI(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-1.5-flash",
+    temperature=0.8,
+)
+llm_final_decision = ChatGoogleGenerativeAI(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-1.5-flash",
+    temperature=0.6,
+)
+llm_design_brainstorm = ChatGoogleGenerativeAI(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-1.5-flash",
+    temperature=0.6,
+)
+llm_techstack_decider = ChatGoogleGenerativeAI(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-1.5-flash",
+    temperature=0.7,
+)
 
 # Define system roles
 roles = {
     "Minimalist": "Focus on only the core essential features needed for MVP.",
     "Scalability Advocate": "Think about how features can be expanded in the future and balance feasibility.",
-    "UX Focus": "Prioritize user experience, ease of use, and modern design choices."
+    "UX Focus": "Prioritize user experience, ease of use, and modern design choices.",
 }
+
 
 # Generate Initial MVP Feature List
 def generate_mvp_features(product_description):
@@ -34,6 +67,7 @@ def generate_mvp_features(product_description):
     """
     response = llm_mvp_generator.predict(prompt)
     return response
+
 
 # Debate on MVP features
 def debate_mvp_features(feature_list):
@@ -47,9 +81,12 @@ def debate_mvp_features(feature_list):
         Provide your critique as a {role}. {instruction}
         List any features that should be removed, added, or modified.
         """
-        critiques[role] = globals()[f"llm_{role.lower().replace(' ', '_')}"].predict(prompt)
+        critiques[role] = globals()[f"llm_{role.lower().replace(' ', '_')}"].predict(
+            prompt
+        )
 
     return critiques
+
 
 # Finalize MVP after debate
 def finalize_mvp(feature_list, critiques):
