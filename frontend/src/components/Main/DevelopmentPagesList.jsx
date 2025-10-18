@@ -21,10 +21,10 @@ const DevelopmentPagesList = ({ pages, onAddDesign, onEditDetails }) => {
           <div className="font-medium text-gray-900">Pages to be built:</div>
 
           <ul className="flex flex-col gap-2">
-            {pages.map((page) => (
+            {pages.map((page, index) => (
               <li
-                key={page.id}
-                className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded-md border border-gray-200"
+                key={index}
+                className="flex justify-between gap-2 items-center bg-gray-50 px-3 py-2 rounded-md border border-gray-200"
               >
                 <div>
                   <div className="font-medium text-gray-800">{page.name}</div>
@@ -33,10 +33,10 @@ const DevelopmentPagesList = ({ pages, onAddDesign, onEditDetails }) => {
                   )}
                 </div>
 
-                <div className="flex gap-1">
+                <div className="flex gap-1 shrink-0">
                   <button
                     onClick={() => onAddDesign(page.id)}
-                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-green-100 hover:bg-green-200 text-green-800"
+                    className="flex items-center gap-1 text-xs px-2 py-2 rounded-md bg-green-100 hover:bg-green-200 text-green-800"
                   >
                     <PlusCircle size={14} /> Add UI
                   </button>

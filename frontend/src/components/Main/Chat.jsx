@@ -206,43 +206,34 @@ const Chat = () => {
         </div>
       )}
       <div className="flex-1 overflow-y-auto p-4">
-        {messages.map((msg, index) => {
-          if (msg.text) {
-            return (
+        {messages.map((msg, index) => (
+          <div key={index}>
+            {msg.specialComponent === "developmentPagesList" && (
+              <DevelopmentPagesList
+                pages={msg.data || []}
+                onAddDesign={() => setShowCanvas(true)}
+                onEditDetails={() => {}}
+              />
+            )}
+            {msg.text && (
               <ChatMessage
-                key={index}
                 text={msg.text}
                 isUser={msg.isUser}
                 isLoading={msg.isLoading}
                 is_choice={msg.isSeekingApproval}
                 onChoiceSelect={handleChoice}
               />
-            );
-          }
-          if (msg.specialComponent === "developmentPagesList") {
-            return (
-              <DevelopmentPagesList
-                key={index}
-                pages={[
-                  { id: 1, name: "index.html", description: "Home page" },
-                  { id: 2, name: "about.html", description: "About page" },
-                ]}
-                onAddDesign={() => setShowCanvas(true)}
-                onEditDetails={() => {}}
-              />
-            );
-          }
-          if (msg.specialComponent === "colorPicker") {
-            return (
+            )}
+            {msg.specialComponent === "colorPicker" && (
               <ColorPickerInput
-                key={index}
                 onColorSelect={handleColorSelect}
                 onTextSend={handleSend}
                 disabled={isLoading}
               />
-            );
-          }
-        })}
+            )}
+          </div>
+        ))}
+
         <div ref={messagesEndRef} />
       </div>
       {showCanvas && (
