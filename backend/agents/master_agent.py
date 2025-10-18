@@ -707,7 +707,7 @@ class MasterAgent:
 
         interpreter_llm = ChatGoogleGenerativeAI(
             google_api_key=os.getenv("GOOGLE_API_KEY"),
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             temperature=0.7,
         )
         response = interpreter_llm.predict(prompt)
@@ -738,7 +738,7 @@ class MasterAgent:
 
         llm = ChatGoogleGenerativeAI(
             google_api_key=os.getenv("GOOGLE_API_KEY"),
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             temperature=0.6,
         )
 

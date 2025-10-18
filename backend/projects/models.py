@@ -15,6 +15,19 @@ class AgentSteps(models.TextChoices):
     COMPLETE = "complete", "Completed"
 
 
+class DevelopmentStage(models.Model):
+    """
+    Tracks development progress for a project.
+    """
+
+    project = models.OneToOneField(
+        "Project", on_delete=models.CASCADE, related_name="project_development_stage"
+    )
+    pages_approved = models.BooleanField(default=False)
+    pages = models.JSONField(blank=True, null=True, default=list)
+    prompts = models.JSONField(blank=True, null=True)
+
+
 class Project(models.Model):
     chat = models.OneToOneField(Chat, on_delete=models.CASCADE, related_name="project")
 
@@ -24,13 +37,19 @@ class Project(models.Model):
 
     product_description = models.TextField(blank=True, null=True)
     mvp = models.TextField(blank=True, null=True)
-    critiques = models.JSONField(blank=True, null=True)
-    final_mvp = models.TextField(blank=True, null=True)
     design_guidelines = models.TextField(blank=True, null=True)
     tech_stack = models.TextField(blank=True, null=True)
     github_username = models.CharField(max_length=100, blank=True, null=True)
     github_repo_name = models.CharField(max_length=100, blank=True, null=True)
     deployed_url = models.URLField(blank=True, null=True)
+    development_stage = models.OneToOneField(
+        DevelopmentStage,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="project_development",
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

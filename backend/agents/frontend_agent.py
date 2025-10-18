@@ -61,7 +61,7 @@ def get_tools(project_id: str):
 
 llm = ChatGoogleGenerativeAI(
     google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
+    model="gemini-2.5-flash",
     temperature=0,
     max_tokens=None,
     timeout=None,
@@ -73,19 +73,16 @@ fallback_pages = [
         "name": "index",
         "description": "Landing/home page that serves as the main entry point and introduces the application to visitors",
         "content": "Hero section with compelling headline and app description, navigation menu with links to all main pages, call-to-action buttons for primary actions, feature highlights or benefits section, footer with contact info and links",
-        "special_notes": "Should be optimized for conversions and clearly communicate the value proposition",
     },
     {
         "name": "login",
         "description": "User authentication page for existing users to access their accounts",
         "content": "Login form with email/username and password fields, remember me checkbox, forgot password link, link to register page for new users, form validation with error messages, loading states for form submission",
-        "special_notes": "Include proper form validation and security considerations, redirect logic after successful login",
     },
     {
         "name": "register",
         "description": "User registration page for new users to create accounts",
         "content": "Registration form with required fields (name, email, password, confirm password), validation with real-time feedback, terms and conditions acceptance, link to login page for existing users, success confirmation",
-        "special_notes": "Include strong password requirements and clear validation feedback",
     },
 ]
 
@@ -95,7 +92,7 @@ def identify_website_pages(
 ) -> List[Dict[str, str]]:
     """Identify all pages needed for the website with detailed descriptions."""
     page_identification_prompt = f"""
-    Based on the following project description, identify ALL pages that this website should contain.
+    Based on the following project description, identify the pages that this website should contain.
     
     Project Description: {description.strip()}
     MVP Features: {mvp.strip()}
@@ -105,7 +102,6 @@ def identify_website_pages(
     1. The page name (without .html extension, use lowercase with hyphens for multi-word names)
     2. A clear description of what this page is for and its purpose in the user journey
     3. Detailed list of specific elements, sections, and functionality that should be included
-    4. Any special considerations for this page (forms, interactivity, data display, etc.)
     
     Return ONLY a JSON array of objects with this structure:
     [
@@ -113,18 +109,16 @@ def identify_website_pages(
             "name": "index",
             "description": "Landing/home page that serves as the main entry point and introduces the application to visitors",
             "content": "Hero section with compelling headline and app description, navigation menu with links to all main pages, call-to-action buttons for primary actions (login/register/get-started), feature highlights or benefits section, testimonials or social proof if applicable, footer with contact info and links",
-            "special_notes": "Should be optimized for conversions and clearly communicate the value proposition"
         }},
         {{
             "name": "login", 
             "description": "User authentication page for existing users to access their accounts",
             "content": "Login form with email/username and password fields, remember me checkbox, forgot password link, link to register page for new users, form validation with error messages, loading states for form submission",
-            "special_notes": "Include proper form validation and security considerations, redirect logic after successful login"
         }}
     ]
     
-    Be comprehensive and think about the complete user experience. Include all essential pages for the MVP functionality.
-    Consider pages like: landing/home, authentication (login/register), main application pages, user profile/settings, help/support, legal pages if needed.
+    Be comprehensive and think about the complete user experience. Include only essential pages for the MVP functionality.
+    Consider pages like: landing/home, authentication (login/register), main application pages, user profile/settings if needed.
     """
 
     response = llm.predict(page_identification_prompt)
@@ -177,111 +171,103 @@ def structure_frontend_requests(
 
     prompts = []
 
-    for i, page_info in enumerate(pages):
-        page_name = page_info["name"]
-        page_description = page_info["description"]
-        page_content = page_info["content"]
-        special_notes = page_info.get("special_notes", "")
+    # for i, page_info in enumerate(pages):
+    #     page_name = page_info["name"]
+    #     page_description = page_info["description"]
+    #     page_content = page_info["content"]
 
-        # Create context about other pages for proper linking
-        other_pages = [p["name"] for p in pages if p["name"] != page_name]
-        other_pages_context = (
-            f"Other pages in this website: {', '.join(other_pages)}.html"
-        )
+    #     # Create context about other pages for proper linking
+    #     other_pages = [p["name"] for p in pages if p["name"] != page_name]
+    #     other_pages_context = (
+    #         f"Other pages in this website: {', '.join(other_pages)}.html"
+    #     )
 
-        # Create context about previously generated pages
-        if i > 0:
-            previous_pages = [p["name"] for p in pages[:i]]
-            previous_context = f"Previously generated pages: {', '.join(previous_pages)}.html - ensure consistent styling, navigation, and branding across all pages."
-        else:
-            previous_context = "This is the first page being generated - establish the design foundation and styling that other pages will follow."
+    #     # Create context about previously generated pages
+    #     if i > 0:
+    #         previous_pages = [p["name"] for p in pages[:i]]
+    #         previous_context = f"Previously generated pages: {', '.join(previous_pages)}.html - ensure consistent styling, navigation, and branding across all pages."
+    #     else:
+    #         previous_context = "This is the first page being generated - establish the design foundation and styling that other pages will follow."
 
-        # Add special instructions based on page type
-        page_specific_instructions = ""
-        if (
-            "login" in page_name.lower()
-            or "register" in page_name.lower()
-            or "form" in page_content.lower()
-        ):
-            page_specific_instructions = """
-        FORM-SPECIFIC REQUIREMENTS:
-        - Include proper form validation with JavaScript
-        - Add loading states and success/error messages
-        - Use proper input types and validation attributes
-        - Include CSRF protection considerations in form structure
-        - Add proper labels and accessibility attributes
-        """
-        elif "index" in page_name.lower() or "home" in page_name.lower():
-            page_specific_instructions = """
-        LANDING PAGE REQUIREMENTS:
-        - Create an engaging hero section that captures attention
-        - Include clear call-to-action buttons with proper styling
-        - Ensure the page loads quickly and looks professional
-        - Add smooth scrolling and subtle animations if appropriate
-        """
+    #     # Add special instructions based on page type
+    #     page_specific_instructions = ""
+    #     if (
+    #         "login" in page_name.lower()
+    #         or "register" in page_name.lower()
+    #         or "form" in page_content.lower()
+    #     ):
+    #         page_specific_instructions = """
+    #     FORM-SPECIFIC REQUIREMENTS:
+    #     - Include proper form validation with JavaScript
+    #     - Add loading states and success/error messages
+    #     - Use proper input types and validation attributes
+    #     - Add proper labels and accessibility attributes
+    #     """
+    #     elif "index" in page_name.lower() or "home" in page_name.lower():
+    #         page_specific_instructions = """
+    #     LANDING PAGE REQUIREMENTS:
+    #     - Create an engaging hero section that captures attention
+    #     - Include clear call-to-action buttons with proper styling
+    #     - Ensure the page loads quickly and looks professional
+    #     - Add smooth scrolling and subtle animations if appropriate
+    #     """
 
-        prompt = f"""
-        Create a complete {page_name}.html file for the following project:
-        
-        PROJECT CONTEXT:
-        Description: {description.strip()}
-        MVP Features: {mvp.strip()}
-        Design Guidelines: {design_guidelines.strip()}
-        
-        PAGE SPECIFIC DETAILS:
-        Page Name: {page_name}.html
-        Page Purpose: {page_description}
-        Required Content/Elements: {page_content}
-        Special Considerations: {special_notes}
-        
-        WEBSITE STRUCTURE:
-        {other_pages_context}
-        {previous_context}
-        
-        TECHNICAL REQUIREMENTS:
-        - Use semantic HTML5 structure with proper tags (header, nav, main, section, article, aside, footer)
-        - Add comprehensive internal <style> tags with modern, professional CSS
-        - Include internal <script> tags for interactivity and user experience enhancements
-        - Use meaningful id and class attributes following BEM methodology where appropriate
-        - Implement responsive design with mobile-first approach using CSS Grid and Flexbox
-        - Include proper navigation menu that links to other pages in the website
-        - Ensure consistent design language, color scheme, and typography across the site
-        - Add proper form validation and user feedback if the page contains forms
-        - Follow accessibility best practices (ARIA labels, semantic HTML, keyboard navigation)
-        - Include meta tags for SEO and social sharing
-        - Add loading states and micro-interactions for better user experience
-        
-        {page_specific_instructions}
-        
-        CRITICAL IMPLEMENTATION NOTES:
-        - MANDATORY: Include ALL the required content/elements specified above for this specific page
-        - The HTML should be complete and self-contained with all styles and scripts inline
-        - Ensure proper indentation and clean, readable code structure
-        - Test that all interactive elements work properly
-        - **IMPORTANT**: Generate clean HTML without any escape characters or literal newlines
-        
-        Generate the complete HTML file content and return it as clean, properly formatted HTML.
-        """
+    #     prompt = f"""
+    #     Create a complete {page_name}.html file for the following project:
 
-        prompts.append(prompt)
+    #     PROJECT CONTEXT:
+    #     Description: {description.strip()}
+    #     MVP Features: {mvp.strip()}
+    #     Design Guidelines: {design_guidelines.strip()}
 
-    return prompts
+    #     PAGE SPECIFIC DETAILS:
+    #     Page Name: {page_name}.html
+    #     Page Purpose: {page_description}
+    #     Required Content/Elements: {page_content}
+
+    #     WEBSITE STRUCTURE:
+    #     {other_pages_context}
+    #     {previous_context}
+
+    #     TECHNICAL REQUIREMENTS:
+    #     - Use semantic HTML5 structure with proper tags (header, nav, main, section, article, aside, footer)
+    #     - Use tailwind CDN for for modern and professional styling, and internal CSS only for complex styling
+    #     - Include internal <script> tags for functionalities and interactivity.
+    #     - Use meaningful id and class attributes following BEM methodology where appropriate
+    #     - Implement responsive design with mobile-first approach using CSS Grid and Flexbox
+    #     - Include proper navigation menu that links to other pages in the website
+    #     - Ensure consistent design language, color scheme, and typography across the site
+    #     - Add proper form validation and user feedback if the page contains forms
+
+    #     {page_specific_instructions}
+
+    #     CRITICAL IMPLEMENTATION NOTES:
+    #     - MANDATORY: Include ALL the required content/elements specified above for this specific page
+    #     - The HTML should be complete and self-contained with all styles and scripts inline
+    #     - **IMPORTANT**: Generate clean HTML without any html escape characters (like &quot;) or literal newlines.
+
+    #     Generate the complete HTML file content and return it as clean, properly formatted HTML.
+    #     """
+
+    #     prompts.append(prompt)
+
+    return pages, prompts
 
 
-def clean_html_content(raw_content: str) -> str:
-    """Clean and process HTML content to remove escape characters and ensure proper formatting."""
-    # Replace literal \n with actual newlines
-    processed = raw_content.replace("\\n", "\n")
-    # Replace literal \t with actual tabs
-    processed = processed.replace("\\t", "\t")
-    # Replace literal \r with actual carriage returns
-    processed = processed.replace("\\r", "\r")
-    # Remove any extra quotes that might wrap the content
-    processed = processed.strip("\"'")
-    # Remove any leading/trailing whitespace
-    processed = processed.strip()
+# def clean_html_content(raw_content: str) -> str:
+#     """Clean and process HTML content to remove escape characters and ensure proper formatting."""
+#     # Replace literal \n with actual newlines
+#     processed = raw_content.replace("\\n", "\n")
+#     # Replace literal \t with actual tabs
+#     processed = processed.replace("\\t", "\t")
+#     # Replace literal \r with actual carriage returns
+#     processed = processed.replace("\\r", "\r")
+#     # Remove any extra quotes that might wrap the content
+#     processed = processed.strip("\"'")
+#     # Remove any leading/trailing whitespace
+#     processed = processed.strip()
 
-    return processed
+#     return processed
 
 
 async def generate_frontend(prompts: List[str], project_id: str, app_type="vanilla"):
@@ -312,17 +298,17 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
         # Add context of previously generated files
         context_info = ""
         if generated_files:
-            context_info = "\n\nPREVIOUSLY GENERATED FILES FOR REFERENCE:\n"
-            for file_info in generated_files:
-                context_info += f"\n--- {file_info['filename']} ---\n"
-                # Include first 800 chars to provide context without overwhelming the prompt
-                content_preview = (
-                    file_info["content"][:800] + "..."
-                    if len(file_info["content"]) > 800
-                    else file_info["content"]
-                )
-                context_info += content_preview
-                context_info += "\n"
+            context_info = "\n\nPREVIOUSLY GENERATED FILE FOR REFERENCE:\n"
+            file_info = generated_files[0]
+            context_info += f"\n--- {file_info['filename']} ---\n"
+            # Include first 800 chars to provide context without overwhelming the prompt
+            content_preview = (
+                file_info["content"][:1600] + "..."
+                if len(file_info["content"]) > 1600
+                else file_info["content"]
+            )
+            context_info += content_preview
+            context_info += "\n"
 
         # Create the full prompt with system instructions
         full_prompt = f"{system_prompt}\n\nUser Request:\n{user_request}{context_info}"
@@ -362,7 +348,7 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
                             actual_html = html_content[start_idx:]
 
                         # Clean the HTML content
-                        processed_html = clean_html_content(actual_html)
+                        processed_html = actual_html
 
                         # Write the file
                         file_path = os.path.join(base_path, filename)
@@ -375,8 +361,8 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
 
                         # Store for context (limit content size for memory efficiency)
                         stored_content = (
-                            processed_html[:1500]
-                            if len(processed_html) > 1500
+                            processed_html[:1600]
+                            if len(processed_html) > 1600
                             else processed_html
                         )
                         generated_files.append(

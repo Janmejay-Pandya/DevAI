@@ -1,7 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-  stage: "ideation",
+  stage: "Init",
   previewUrl: null,
 };
 

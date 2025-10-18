@@ -6,23 +6,19 @@ from utils.chat_utils import ChatUtil
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv, find_dotenv
 from chat.models import Chat
-from projects.models import Project, AgentSteps
+from projects.models import DevelopmentStage, Project, AgentSteps
 from .ideation_agent import (
     generate_mvp_features,
-    debate_mvp_features,
-    finalize_mvp,
     brainstorm_design_guidelines,
     decide_tech_stack,
 )
 from .frontend_agent import (
     generate_frontend,
     structure_frontend_requests,
-    generate_react_frontend,
-    structure_react_requests,
 )
 from .deploy_agent import deploy_to_github
 from utils.github_utils import github_user_exists, github_repo_exists
-from utils.text_utils import extract_json_from_text, extract_prompt_list
+from utils.text_utils import extract_json_from_text
 from .prompts import (
     INTERPRETER_SYSTEM_PROMPT,
     ANSWER_USER_QUERY_PROMPT,
@@ -37,7 +33,6 @@ class MasterAgent:
     def __init__(self, chat_id: int):
         self.chat = Chat.objects.get(id=chat_id)
         self.project, _ = Project.objects.get_or_create(chat=self.chat)
-        self.is_move_forward_question = False
 
     async def handle_input(self, user_input: str) -> Tuple[str, bool]:
         yes_terms = {
@@ -167,27 +162,24 @@ class MasterAgent:
 
     # Individual step handlers
     async def _handle_init(self, request):
-        if self.project.product_description is None:
-            if request.get("intent") == "describe_product" and request.get("message"):
-                self.project.product_description = request.get("message")
-                self.project.current_step = "generate_mvp"
-                await sync_to_async(self.project.save)()
-                await ChatUtil.send_message(
-                    self.chat,
-                    f"Got your product description. You want to make {self.project.product_description}. Generating MVP...",
-                    False,
-                    "Init",
-                )
-                await self._handle_generate_mvp()
-            else:
-                await ChatUtil.send_message(
-                    self.chat,
-                    "Please provide a description of what you'd like to create so that we can move forward",
-                    False,
-                    "Init",
-                )
+        if request.get("intent") == "describe_product" and request.get("message"):
+            self.project.product_description = request.get("message")
+            await ChatUtil.send_message(
+                self.chat,
+                f"Got your product description. You want to make {self.project.product_description}. Generating MVP...",
+                False,
+                "Init",
+            )
+            self.project.current_step = "generate_mvp"
+            await sync_to_async(self.project.save)()
+            await self._handle_generate_mvp()
         else:
-            self._handle_generate_mvp()
+            await ChatUtil.send_message(
+                self.chat,
+                "Please provide a description of what you'd like to create so that we can move forward",
+                False,
+                "Init",
+            )
 
     async def _handle_generate_mvp(self, request=None):
         if not self.project.mvp:
@@ -196,7 +188,7 @@ class MasterAgent:
             await sync_to_async(self.project.save)()
             await ChatUtil.send_message(
                 self.chat,
-                f"Here are the MVP features I've generated:\n\n{mvp}\n. You can suggest any changes or Do you want to confirm this MVP?",
+                f"Here are the MVP features I've generated:\n\n{mvp}\n. You can suggest any changes or confirm if you want to move forward with this MVP?",
                 True,
                 "Ideation",
             )
@@ -218,9 +210,7 @@ class MasterAgent:
         elif request.get("intent") == "modify":
             # Handle requested modifications
             modify_mvp_request = request.get("message", "")
-
-            # TODO: Generate new MVP based on modified description
-            mvp = self._generate_mvp()
+            mvp = self._generate_mvp(modify_mvp_request)
             self.project.mvp = mvp
             await sync_to_async(self.project.save)()
             await ChatUtil.send_message(
@@ -263,9 +253,9 @@ class MasterAgent:
                 False,
                 "Design",
             )
-        elif request.get("intent") == "modify":
+        elif request.get("intent") == "modify" and request.get("message"):
             # Handle design modifications then generate tech stack
-            modified_design = self._update_design(request.get("message", ""))
+            modified_design = self._generate_design(request.get("message"))
             self.project.design_guidelines = modified_design
 
             self.project.current_step = "tech_stack"
@@ -274,7 +264,7 @@ class MasterAgent:
             await ChatUtil.send_message(
                 self.chat,
                 f"Updated design guidelines:\n{modified_design}",
-                True,
+                False,
                 "Design",
             )
             await self._handle_tech_stack()
@@ -301,70 +291,89 @@ class MasterAgent:
 
         await self._handle_development()
 
-    async def _handle_development(self, request=None):
-        if request is None:
-            # Determine if this is a React project based on tech stack
-            is_react_project = False
+    async def _handle_development(self, request=None, changes=None):
+        # Retrieve or initialize development stage
+        dev_stage, _ = await sync_to_async(DevelopmentStage.objects.get_or_create)(
+            project=self.project
+        )
 
-            if is_react_project:
-                # Use React-specific multi-step generation
-                prompts = structure_react_requests(
-                    description=self.project.product_description,
-                    mvp=self.project.mvp,
-                    design_guidelines=self.project.design_guidelines,
-                )
-                await generate_react_frontend(prompts, self.project.id)
+        if not dev_stage.pages:
+            # Use vanilla HTML multi-step generation
+            pages, prompts = structure_frontend_requests(
+                description=self.project.product_description,
+                mvp=self.project.mvp,
+                design_guidelines=self.project.design_guidelines,
+            )
+
+            dev_stage.pages = pages
+            dev_stage.prompts = prompts
+            await sync_to_async(dev_stage.save)()
+            await ChatUtil.send_message(
+                self.chat,
+                f"Here’s the proposed list of pages for development. Please review and let me know if you’d like to make any changes before we begin.",
+                is_seeking_approval=True,
+                project_stage="Development",
+                ui_flags={"show_development_pages_preview": True},
+                stage_data={"pages": pages},
+            )
+            return
+        if not dev_stage.pages_approved:
+            intent = request.get("intent") if request else None
+            if intent == "approve":
+                dev_stage.pages_approved = True
+                await sync_to_async(dev_stage.save)()
 
                 await ChatUtil.send_message(
                     self.chat,
-                    "Development complete! I've implemented all React components and pages according to the specifications. Ready to do testing?",
-                    True,
-                    "Development",
+                    "Perfect! Approval received. Starting development now...",
+                    is_seeking_approval=False,
+                    project_stage="Development",
                 )
-            else:
-                # Use vanilla HTML multi-step generation
-                prompts = structure_frontend_requests(
-                    description=self.project.product_description,
-                    mvp=self.project.mvp,
-                    design_guidelines=self.project.design_guidelines,
-                )
-                await generate_frontend(prompts, self.project.id)
+
+                await generate_frontend(dev_stage.prompts, self.project.id)
 
                 await ChatUtil.send_message(
                     self.chat,
                     "Development complete! I've implemented all pages according to the specifications. Ready to do testing?",
-                    True,
-                    "Development",
+                    is_seeking_approval=True,
+                    project_stage="Development",
                 )
-            return
-
-        if request.get("intent") == "modify":
-            # Handle the modification, then move to testing phase
-            updated_frontend = self._update_frontend(request.get("message", ""))
-            await ChatUtil.send_message(
-                self.chat,
-                f"I've made the suggested changes and completed development.\n\n. Please Confirm if you want to complete development.",
-                True,
-                "Development",
-            )
-        elif request.get("intent") == "approve":
-            # User indicates development is complete, move to testing
-            self.project.current_step = "test"
-            await sync_to_async(self.project.save)()
-            await ChatUtil.send_message(
-                self.chat,
-                f"Great! Development has been completed. Testing Begins.",
-                False,
-                "Testing",
-            )
-            await self._handle_test()
+                return
+            else:
+                await ChatUtil.send_message(
+                    self.chat,
+                    "Please confirm what do you want to do!",
+                    is_seeking_approval=False,
+                    project_stage="Development",
+                )
         else:
-            await ChatUtil.send_message(
-                self.chat,
-                "Please confirm what do you want to do!",
-                False,
-                "Development",
-            )
+            if intent == "modify":
+                # Handle the modification, then move to testing phase
+                self._update_frontend(request.get("message", ""))
+                await ChatUtil.send_message(
+                    self.chat,
+                    f"I've made the suggested changes and completed development.\n\n. Please Confirm if you want to complete development.",
+                    is_seeking_approval=True,
+                    project_stage="Development",
+                )
+            elif intent == "approve":
+                # User indicates development is complete, move to testing
+                self.project.current_step = "test"
+                await sync_to_async(self.project.save)()
+                await ChatUtil.send_message(
+                    self.chat,
+                    f"Great! Development has been completed. Testing Begins.",
+                    is_seeking_approval=False,
+                    project_stage="Testing",
+                )
+                await self._handle_test()
+            else:
+                await ChatUtil.send_message(
+                    self.chat,
+                    "Please confirm what do you want to do!",
+                    is_seeking_approval=False,
+                    project_stage="Development",
+                )
 
     async def _handle_test(self, request=None):
         # Simulate development completion and immediately start testing
@@ -499,43 +508,28 @@ class MasterAgent:
             )
 
     # Helper methods for LLM-based generation
-    def _generate_mvp(self):
+    def _generate_mvp(self, changes=None):
         """Generate MVP features based on product description using LLM"""
-        return generate_mvp_features(self.project.product_description)
+        changes_request = None
+        if changes:
+            changes_request = f"{self.project.mvp}\nUser suggestion: {changes}"
+        return generate_mvp_features(self.project.product_description, changes_request)
         # return f"Features for {self.project.product_description}:\n1. User authentication\n2. Data storage\n3. Basic UI with essential controls\n4. Core functionality implementation"
 
-    def _update_mvp(self, user_feedback):
-        """Update MVP based on user feedback"""
-        return f"Updated MVP based on your feedback:\n1. Modified user authentication\n2. Enhanced data storage\n3. Improved UI\n4. Extended core functionality"
-
-    def _update_mvp_with_feedback(self, user_feedback):
-        """Update MVP based on critiques and user feedback"""
-        return f"Final MVP incorporating feedback and critiques:\n1. Streamlined authentication\n2. Optimized data storage\n3. User-friendly interface\n4. Focused core functionality"
-
-    def _debate(self):
-        """Generate critiques of the MVP features using LLM"""
-        critiques = debate_mvp_features(self.project.mvp)
-        formatted = []
-
-        for perspective, critique in critiques.items():
-            formatted.append(f"=== {perspective} Perspective ===\n{critique.strip()}\n")
-
-        return "\n".join(formatted)
-        # return "Product Manager: Features 1 and 3 are essential, but feature 2 needs refinement.\nDesigner: The UI needs more attention to user experience.\nDeveloper: Implementation is feasible but should prioritize core functionality first."
-
-    def _finalize_mvp(self):
-        """Finalize MVP based on critiques and initial features"""
-        return finalize_mvp(self.project.mvp, self.project.critiques)
-        # return "Final MVP Features:\n1. Streamlined user authentication\n2. Optimized data storage\n3. User-friendly interface with essential controls\n4. Core functionality with prioritized implementation"
-
-    def _generate_design(self):
-        """Generate design guidelines based on product description"""
-        return brainstorm_design_guidelines(self.project.product_description)
+    def _generate_design(self, changes=None):
+        """
+        Generate design guidelines based on product description
+        If changes are provided, they are considered along with previous recommendations.
+        """
+        changes_request = None
+        if changes:
+            changes_request = (
+                f"{self.project.design_guidelines}\nUser suggestion: {changes}"
+            )
+        return brainstorm_design_guidelines(
+            self.project.product_description, changes_request
+        )
         # return "Design Guidelines:\n- Font: Roboto\n- Color scheme: #3FCF8E (primary), #FFFFFF (secondary)\n- Minimalist UI with clear hierarchy\n- Responsive design for all device sizes"
-
-    def _update_design(self, user_feedback):
-        """Update design based on user feedback"""
-        return "Updated Design Guidelines:\n- Font: Roboto and Open Sans\n- Color scheme: #3FCF8E (primary), #FFFFFF (secondary), #212121 (text)\n- Refined UI with improved visual hierarchy\n- Enhanced responsive design with mobile-first approach"
 
     def _generate_tech_stack(self):
         """Generate tech stack recommendations"""
@@ -546,22 +540,9 @@ class MasterAgent:
         )
         # return "\n- Frontend: React.js with Tailwind CSS\n- Backend: Node.js with Express\n- Database: MongoDB\n- Authentication: JWT\n- Deployment: GitHub Pages"
 
-    def _update_tech_stack(self, user_feedback):
-        """Update tech stack based on user feedback"""
-        return "Updated Tech Stack:\n- Frontend: React.js with Tailwind CSS\n- Backend: Node.js with Express\n- Database: PostgreSQL\n- Authentication: Auth0\n- Deployment: GitHub Pages with CI/CD pipeline"
-
     def _update_frontend(self, user_feedback):
         """Update frontend based on user feedback"""
         return "Updated Frontend Implementation:\n- Modified UI components based on feedback\n- Enhanced responsive design\n- Improved user experience flow\n- Added requested visual elements"
-
-    def _apply_post_deployment_changes(self, user_feedback):
-        """Apply post-deployment changes based on user feedback"""
-        return "Post-Deployment Changes:\n- Added requested features\n- Fixed identified issues\n- Enhanced performance\n- Updated styling as requested"
-
-    def redeploy_to_github(self, github_username, repo_name):
-        """Redeploy updated application to GitHub"""
-        # In a real implementation, this would update the GitHub repository
-        return True  # Mock implementation
 
     def _interpret_feedback(
         self, feedback: str, last_question: str = "", project_context: dict = None
