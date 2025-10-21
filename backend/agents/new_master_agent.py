@@ -14,7 +14,8 @@ from .ideation_agent import (
 )
 from .frontend_agent import (
     generate_frontend,
-    structure_frontend_requests,
+    identify_website_pages,
+    generate_frontend_prompts,
 )
 from .deploy_agent import deploy_to_github
 from utils.github_utils import github_user_exists, github_repo_exists
@@ -296,21 +297,18 @@ class MasterAgent:
         dev_stage, _ = await sync_to_async(DevelopmentStage.objects.get_or_create)(
             project=self.project
         )
+        intent = request.get("intent") if request else None
 
         if not dev_stage.pages:
-            # Use vanilla HTML multi-step generation
-            pages, prompts = structure_frontend_requests(
-                description=self.project.product_description,
-                mvp=self.project.mvp,
-                design_guidelines=self.project.design_guidelines,
+            pages = identify_website_pages(
+                description=self.project.product_description, mvp=self.project.mvp
             )
-
             dev_stage.pages = pages
-            dev_stage.prompts = prompts
             await sync_to_async(dev_stage.save)()
+
             await ChatUtil.send_message(
                 self.chat,
-                f"Here’s the proposed list of pages for development. Please review and let me know if you’d like to make any changes before we begin.",
+                f"Here’s the proposed list of pages for development. Please review and confirm before we proceed.",
                 is_seeking_approval=True,
                 project_stage="Development",
                 ui_flags={"show_development_pages_preview": True},
@@ -318,9 +316,18 @@ class MasterAgent:
             )
             return
         if not dev_stage.pages_approved:
-            intent = request.get("intent") if request else None
             if intent == "approve":
                 dev_stage.pages_approved = True
+                await sync_to_async(dev_stage.save)()
+
+                prompts = generate_frontend_prompts(
+                    description=self.project.product_description,
+                    pages=dev_stage.pages,
+                    mvp=self.project.mvp,
+                    design_guidelines=self.project.design_guidelines,
+                )
+
+                dev_stage.prompts = prompts
                 await sync_to_async(dev_stage.save)()
 
                 await ChatUtil.send_message(

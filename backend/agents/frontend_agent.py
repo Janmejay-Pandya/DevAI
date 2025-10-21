@@ -177,7 +177,7 @@ def get_relevant_images(description: str) -> Dict[str, List[str]]:
     )
 
     response = llm.predict(prompt)
-    keywords_text = response.content.strip()
+    keywords_text = response.strip()
 
     # Parse output safely
     try:
@@ -210,84 +210,109 @@ def get_relevant_images(description: str) -> Dict[str, List[str]]:
     return data
 
 
-def structure_frontend_requests(
-    description: str, mvp: str = "", design_guidelines: str = ""
+def generate_frontend_prompts(
+    description: str, pages: List[dict], mvp: str = "", design_guidelines: str = ""
 ) -> List[str]:
     """Structure frontend requests into step-by-step page generation prompts."""
-    # First identify all pages needed
-    pages = identify_website_pages(description, mvp)
+    try:
+        image_data = get_relevant_images(description)
+    except Exception as e:
+        print(f"[Warning] Could not fetch images: {e}")
+        image_data = {}
+
+    # Flatten image URLs
+    all_image_urls = []
+    for tag, urls in image_data.items():
+        all_image_urls.extend(urls)
+
+    visual_assets_context = (
+        "AVAILABLE IMAGE ASSETS:\n" + "\n".join(all_image_urls)
+        if all_image_urls
+        else "No image assets available; use generic placeholders."
+    )
 
     prompts = []
 
-    # for i, page_info in enumerate(pages):
-    #     page_name = page_info["name"]
-    #     page_description = page_info["description"]
-    #     page_content = page_info["content"]
+    for i, page_info in enumerate(pages):
+        page_name = page_info["name"]
+        page_description = page_info["description"]
+        page_content = page_info["content"]
 
-    #     # Create context about other pages for proper linking
-    #     other_pages = [p["name"] for p in pages if p["name"] != page_name]
-    #     other_pages_context = (
-    #         f"Other pages in this website: {', '.join(other_pages)}.html"
-    #     )
+        # Create context about other pages for proper linking
+        other_pages = [p["name"] for p in pages if p["name"] != page_name]
+        other_pages_context = (
+            f"Other pages in this website: {', '.join(other_pages)}.html"
+        )
 
-    #     # Add special instructions based on page type
-    #     page_specific_instructions = ""
-    #     if (
-    #         "login" in page_name.lower()
-    #         or "register" in page_name.lower()
-    #         or "form" in page_content.lower()
-    #     ):
-    #         page_specific_instructions = """
-    #     FORM-SPECIFIC REQUIREMENTS:
-    #     - Include proper form validation with JavaScript
-    #     - Add loading states and success/error messages
-    #     - Use proper input types and validation attributes
-    #     """
-    #     elif "index" in page_name.lower() or "home" in page_name.lower():
-    #         page_specific_instructions = """
-    #     LANDING PAGE REQUIREMENTS:
-    #     - Create an engaging hero section that captures attention
-    #     - Include clear call-to-action buttons with proper stylinge
-    #     """
+        # Add special instructions based on page type
+        page_specific_instructions = ""
+        if (
+            "login" in page_name.lower()
+            or "register" in page_name.lower()
+            or "form" in page_content.lower()
+        ):
+            page_specific_instructions = """
+        FORM-SPECIFIC REQUIREMENTS:
+        - Include proper form validation with JavaScript
+        - Add loading states and success/error messages
+        - Use appropriate input types and validation attributes
+        """
+        elif "index" in page_name.lower() or "home" in page_name.lower():
+            page_specific_instructions = """
+        LANDING PAGE REQUIREMENTS:
+        - Engaging hero section that captures attention
+        - Clear call-to-action buttons
+        """
+        visual_and_icon_guidelines = f"""
+        VISUAL ENHANCEMENT REQUIREMENTS:
+        - Use plenty of relevant images and icons for better aesthetics and communication.
+        - Use images from the list below when designing sections:
+        {visual_assets_context}
+        - Optimize layout to visually balance text and imagery.
+        - Use Font Awesome (Free) icons via CDN:
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+        - Integrate icons for buttons, navigation, features, and section headings where appropriate.
+        """
 
-    #     prompt = f"""
-    #     Create a complete {page_name}.html file for the following project:
+        prompt = f"""
+        Create a complete {page_name}.html file for the following project:
 
-    #     PROJECT CONTEXT:
-    #     Description: {description.strip()}
-    #     MVP Features: {mvp.strip()}
-    #     Design Guidelines: {design_guidelines.strip()}
+        PROJECT CONTEXT:
+        Description: {description.strip()}
+        MVP Features: {mvp.strip()}
+        Design Guidelines: {design_guidelines.strip()}
 
-    #     PAGE SPECIFIC DETAILS:
-    #     Page Name: {page_name}.html
-    #     Page Purpose: {page_description}
-    #     Required Content/Elements: {page_content}
+        PAGE SPECIFIC DETAILS:
+        Page Name: {page_name}.html
+        Page Purpose: {page_description}
+        Required Content/Elements: {page_content}
 
-    #     WEBSITE STRUCTURE:
-    #     {other_pages_context}
+        WEBSITE STRUCTURE:
+        {other_pages_context}
 
-    #     TECHNICAL REQUIREMENTS:
-    #     - Use semantic HTML5 structure with proper tags (header, nav, main, section, article, aside, footer)
-    #     - Use tailwind CDN for for modern and professional styling, and internal CSS if required for complex styling
-    #     - Include internal <script> tags for functionalities and interactivity.
-    #     - Use meaningful id and class attributes following BEM methodology where appropriate
-    #     - Implement responsive design with mobile-first approach using CSS Grid and Flexbox
-    #     - Include proper navigation menu that links to other pages in the website
-    #     - Follow the design guideline for colors and typography
+        TECHNICAL REQUIREMENTS:
+        - Use semantic HTML5 structure with proper tags (header, nav, main, section, article, aside, footer)
+        - Use tailwind CDN for for modern and professional styling, and internal CSS if required for complex styling
+        - Include internal <script> tags for functionalities and interactivity.
+        - Use meaningful id and class attributes following BEM methodology where appropriate
+        - Implement responsive design with mobile-first approach using CSS Grid and Flexbox
+        - Include proper navigation menu that links to other pages in the website
+        - Follow the design guideline for colors and typography
 
-    #     {page_specific_instructions}
+        {page_specific_instructions}
+        {visual_and_icon_guidelines}
 
-    #     CRITICAL IMPLEMENTATION NOTES:
-    #     - MANDATORY: Include ALL the required content/elements specified above for this specific page
-    #     - The HTML should be complete and self-contained
-    #     - **IMPORTANT**: Generate clean HTML without any html escape characters (like &quot;) or literal newlines.
+        CRITICAL IMPLEMENTATION NOTES:
+        - MANDATORY: Include ALL the required content/elements specified above for this specific page
+        - The HTML should be complete and self-contained
+        - **IMPORTANT**: Generate clean HTML without any html escape characters (like &quot;) or literal newlines.
 
-    #     Generate the complete HTML file content and return it as clean, properly formatted HTML.
-    #     """
+        Generate the complete HTML file content and return it as clean, properly formatted HTML.
+        """
 
-    #     prompts.append(prompt)
+        prompts.append(prompt)
 
-    return pages, prompts
+    return prompts
 
 
 # def clean_html_content(raw_content: str) -> str:

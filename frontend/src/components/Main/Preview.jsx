@@ -13,8 +13,9 @@ const Preview = () => {
 
   useEffect(() => {
     let interval = null;
+    console.log(projectStage);
 
-    if (projectStage === "deploy" || projectStage === "complete") {
+    if (projectStage === "Deploy" || projectStage === "Complete") {
       const fetchPreviewUrl = async () => {
         try {
           const response = await api.get(API_ENDPOINTS.PREVIEW_URL(currentChatId));
