@@ -2,13 +2,17 @@
 
 import os
 import time
+import json
 import asyncio
+import requests
 from typing import List, Dict
 from langchain_core.tools import tool
+from langchain.schema import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv, find_dotenv
 from utils.terminal_utils import TerminalLogger
 from .prompts import FRONTEND_SYSTEM_PROMPT, REACT_SYSTEM_PROMPT
+
 
 load_dotenv(find_dotenv(), override=True)
 
@@ -61,7 +65,7 @@ def get_tools(project_id: str):
 
 llm = ChatGoogleGenerativeAI(
     google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash",
     temperature=0,
     max_tokens=None,
     timeout=None,
@@ -87,18 +91,15 @@ fallback_pages = [
 ]
 
 
-def identify_website_pages(
-    description: str, mvp: str = "", design_guidelines: str = ""
-) -> List[Dict[str, str]]:
+def identify_website_pages(description: str, mvp: str = "") -> List[Dict[str, str]]:
     """Identify all pages needed for the website with detailed descriptions."""
     page_identification_prompt = f"""
     Based on the following project description, identify the pages that this website should contain.
     
     Project Description: {description.strip()}
     MVP Features: {mvp.strip()}
-    Design Guidelines: {design_guidelines.strip()}
     
-    Analyze the project requirements and think about the complete user journey. For each page, provide:
+    Analyze the project requirements and think about the user journey. For each page, provide:
     1. The page name (without .html extension, use lowercase with hyphens for multi-word names)
     2. A clear description of what this page is for and its purpose in the user journey
     3. Detailed list of specific elements, sections, and functionality that should be included
@@ -117,15 +118,13 @@ def identify_website_pages(
         }}
     ]
     
-    Be comprehensive and think about the complete user experience. Include only essential pages for the MVP functionality.
+    Be comprehensive but try to summarize the user journey in max 5 to 6 pages. Include only essential pages for the MVP functionality.
     Consider pages like: landing/home, authentication (login/register), main application pages, user profile/settings if needed.
     """
 
     response = llm.predict(page_identification_prompt)
 
     try:
-        import json
-
         # Find JSON array in response
         start = response.find("[")
         end = response.rfind("]") + 1
@@ -162,12 +161,61 @@ def identify_website_pages(
         return fallback_pages
 
 
+def get_relevant_images(description: str) -> Dict[str, List[str]]:
+    """
+    Extracts 3 relevant keywords from a description using a Gemini model,
+    fetches related images from the local FastAPI image service,
+    and returns them grouped by tag.
+    """
+
+    # Ask LLM to extract 3 keywords
+    prompt = (
+        "Extract exactly 3 short, distinct keywords that best represent visual "
+        "themes for the following website description. "
+        "Return them as a JSON list of strings without any extra text.\n\n"
+        f"Description:\n{description}"
+    )
+
+    response = llm.predict(prompt)
+    keywords_text = response.content.strip()
+
+    # Parse output safely
+    try:
+        start = keywords_text.find("[")
+        end = keywords_text.rfind("]") + 1
+        if start != -1 and end != 0:
+            keywords_text = keywords_text[start:end]
+
+        tags = json.loads(keywords_text)
+        if not isinstance(tags, list):
+            raise ValueError
+
+    except Exception:
+        # Fallback: split by comma if model didn’t return JSON
+        tags = [word.strip() for word in keywords_text.split(",") if word.strip()]
+
+    if len(tags) == 0:
+        tags = ["abstract"]
+
+    # Call local image service
+    try:
+        res = requests.post(
+            "http://localhost:8001/get_images", json={"tags": tags}, timeout=20
+        )
+        res.raise_for_status()
+        data = res.json()
+    except Exception as e:
+        raise RuntimeError(f"Image service request failed: {e}")
+
+    return data
+
+
 def structure_frontend_requests(
     description: str, mvp: str = "", design_guidelines: str = ""
 ) -> List[str]:
     """Structure frontend requests into step-by-step page generation prompts."""
     # First identify all pages needed
-    pages = identify_website_pages(description, mvp, design_guidelines)
+    pages = identify_website_pages(description, mvp)
 
     prompts = []
 
@@ -182,13 +230,6 @@ def structure_frontend_requests(
     #         f"Other pages in this website: {', '.join(other_pages)}.html"
     #     )
 
-    #     # Create context about previously generated pages
-    #     if i > 0:
-    #         previous_pages = [p["name"] for p in pages[:i]]
-    #         previous_context = f"Previously generated pages: {', '.join(previous_pages)}.html - ensure consistent styling, navigation, and branding across all pages."
-    #     else:
-    #         previous_context = "This is the first page being generated - establish the design foundation and styling that other pages will follow."
-
     #     # Add special instructions based on page type
     #     page_specific_instructions = ""
     #     if (
@@ -201,15 +242,12 @@ def structure_frontend_requests(
     #     - Include proper form validation with JavaScript
     #     - Add loading states and success/error messages
     #     - Use proper input types and validation attributes
-    #     - Add proper labels and accessibility attributes
     #     """
     #     elif "index" in page_name.lower() or "home" in page_name.lower():
     #         page_specific_instructions = """
     #     LANDING PAGE REQUIREMENTS:
     #     - Create an engaging hero section that captures attention
-    #     - Include clear call-to-action buttons with proper styling
-    #     - Ensure the page loads quickly and looks professional
-    #     - Add smooth scrolling and subtle animations if appropriate
+    #     - Include clear call-to-action buttons with proper stylinge
     #     """
 
     #     prompt = f"""
@@ -227,23 +265,21 @@ def structure_frontend_requests(
 
     #     WEBSITE STRUCTURE:
     #     {other_pages_context}
-    #     {previous_context}
 
     #     TECHNICAL REQUIREMENTS:
     #     - Use semantic HTML5 structure with proper tags (header, nav, main, section, article, aside, footer)
-    #     - Use tailwind CDN for for modern and professional styling, and internal CSS only for complex styling
+    #     - Use tailwind CDN for for modern and professional styling, and internal CSS if required for complex styling
     #     - Include internal <script> tags for functionalities and interactivity.
     #     - Use meaningful id and class attributes following BEM methodology where appropriate
     #     - Implement responsive design with mobile-first approach using CSS Grid and Flexbox
     #     - Include proper navigation menu that links to other pages in the website
-    #     - Ensure consistent design language, color scheme, and typography across the site
-    #     - Add proper form validation and user feedback if the page contains forms
+    #     - Follow the design guideline for colors and typography
 
     #     {page_specific_instructions}
 
     #     CRITICAL IMPLEMENTATION NOTES:
     #     - MANDATORY: Include ALL the required content/elements specified above for this specific page
-    #     - The HTML should be complete and self-contained with all styles and scripts inline
+    #     - The HTML should be complete and self-contained
     #     - **IMPORTANT**: Generate clean HTML without any html escape characters (like &quot;) or literal newlines.
 
     #     Generate the complete HTML file content and return it as clean, properly formatted HTML.

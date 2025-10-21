@@ -35,13 +35,25 @@ const DevelopmentPagesList = ({ pages, onAddDesign, onEditDetails }) => {
 
                 <div className="flex gap-1 shrink-0">
                   <button
-                    onClick={() => onAddDesign(page.id)}
-                    className="flex items-center gap-1 text-xs px-2 py-2 rounded-md bg-green-100 hover:bg-green-200 text-green-800"
+                    disabled={!!page.design}
+                    onClick={() => !page.design && onAddDesign(page.name)}
+                    className={`flex items-center gap-1 text-xs px-2 py-2 rounded-md ${
+                      page.design
+                        ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                        : "bg-green-100 hover:bg-green-200 text-green-800"
+                    }`}
                   >
-                    <PlusCircle size={14} /> Add UI
+                    {page.design ? (
+                      <>Uploaded</>
+                    ) : (
+                      <>
+                        <PlusCircle size={14} /> Add UI
+                      </>
+                    )}
                   </button>
+
                   <button
-                    onClick={() => onEditDetails(page.id)}
+                    onClick={() => onEditDetails(page.name)}
                     className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-blue-100 hover:bg-blue-200 text-blue-800"
                   >
                     <Pencil size={14} /> Edit

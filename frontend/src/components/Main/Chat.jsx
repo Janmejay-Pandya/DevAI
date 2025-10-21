@@ -5,7 +5,7 @@ import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import api from "../../api";
 import { API_ENDPOINTS } from "../../constants";
-import { setStage } from "../../store/slices/projectSlice";
+import { setStage, setPages } from "../../store/slices/projectSlice";
 import { setCurrentChatId } from "../../store/slices/chatSlice";
 import StageInfo from "./StageInfo";
 import DevelopmentPagesList from "./DevelopmentPagesList";
@@ -20,6 +20,8 @@ const Chat = () => {
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
   const currentChatId = useSelector((state) => state.chat.currentChatId);
+  const pages = useSelector((state) => state.project.pages);
+  const [selectedFile, setSelectedFile] = useState(null);
   const dispatch = useDispatch();
 
   const location = useLocation();
@@ -103,9 +105,11 @@ const Chat = () => {
         isSeekingApproval: data.is_seeking_approval,
         ...(extra_details?.ui_flags?.show_development_pages_preview && {
           specialComponent: "developmentPagesList",
-          data: extra_details?.stage_data?.pages || [],
         }),
       };
+      if (extra_details?.stage_data?.pages) {
+        dispatch(setPages(extra_details.stage_data.pages));
+      }
 
       setMessages((prev) => [...prev.filter((msg) => !msg.isLoading), newMessage]);
 
@@ -190,6 +194,11 @@ const Chat = () => {
     );
   };
 
+  const handleAddDesign = (fileName) => {
+    setSelectedFile(fileName);
+    setShowCanvas(true);
+  };
+
   const [showCanvas, setShowCanvas] = useState(false);
 
   return (
@@ -210,8 +219,8 @@ const Chat = () => {
           <div key={index}>
             {msg.specialComponent === "developmentPagesList" && (
               <DevelopmentPagesList
-                pages={msg.data || []}
-                onAddDesign={() => setShowCanvas(true)}
+                pages={pages || []}
+                onAddDesign={handleAddDesign}
                 onEditDetails={() => {}}
               />
             )}
@@ -242,6 +251,7 @@ const Chat = () => {
           onClose={() => {
             setShowCanvas(false);
           }}
+          fileName={selectedFile}
         />
       )}
       <StageInfo />

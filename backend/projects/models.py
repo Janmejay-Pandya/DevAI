@@ -21,7 +21,7 @@ class DevelopmentStage(models.Model):
     """
 
     project = models.OneToOneField(
-        "Project", on_delete=models.CASCADE, related_name="project_development_stage"
+        "Project", on_delete=models.CASCADE, related_name="development_stage"
     )
     pages_approved = models.BooleanField(default=False)
     pages = models.JSONField(blank=True, null=True, default=list)
@@ -42,13 +42,6 @@ class Project(models.Model):
     github_username = models.CharField(max_length=100, blank=True, null=True)
     github_repo_name = models.CharField(max_length=100, blank=True, null=True)
     deployed_url = models.URLField(blank=True, null=True)
-    development_stage = models.OneToOneField(
-        DevelopmentStage,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="project_development",
-    )
 
     updated_at = models.DateTimeField(auto_now=True)
 
