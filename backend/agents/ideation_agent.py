@@ -28,7 +28,7 @@ def generate_mvp_features(product_description, changes):
     prompt = f"""
     Given the product description: "{product_description}",
     generate a very minimal MVP feature list. 
-    Focus strictly on essential features needed for a functional product.
+    Focus strictly on basic and essential features needed for a functional product.
     Avoid advanced features like payment integrations, analytics, or third-party APIs.
 
     """

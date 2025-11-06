@@ -139,7 +139,7 @@ const ColorPickerInput = ({ onColorSelect, disabled }) => {
   };
 
   return (
-    <div className="border-t border-gray-200 bg-white">
+    <div className="border-t border-gray-200 bg-white my-2">
       {/* Header */}
       <div className="flex justify-center py-3 bg-gray-50 border-b border-gray-200">
         <div className="flex items-center gap-2">

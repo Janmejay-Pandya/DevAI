@@ -106,6 +106,9 @@ const Chat = () => {
         ...(extra_details?.ui_flags?.show_development_pages_preview && {
           specialComponent: "developmentPagesList",
         }),
+        ...(extra_details?.ui_flags?.show_color_picker && {
+          specialComponent: "colorPicker",
+        }),
       };
       if (extra_details?.stage_data?.pages) {
         dispatch(setPages(extra_details.stage_data.pages));

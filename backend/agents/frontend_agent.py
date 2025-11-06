@@ -1,20 +1,47 @@
 """Frontend agent for generating multi-step website pages with proper structure and references."""
 
 import os
+import re
 import time
 import json
 import asyncio
 import requests
+import itertools
 from typing import List, Dict
 from langchain_core.tools import tool
 from langchain.schema import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv, find_dotenv
+from agents.designer_agent import generate_ui_from_image
+from utils.text_utils import extract_filename
 from utils.terminal_utils import TerminalLogger
 from .prompts import FRONTEND_SYSTEM_PROMPT, REACT_SYSTEM_PROMPT
 
 
 load_dotenv(find_dotenv(), override=True)
+
+# List of keys
+API_KEYS = [
+    os.getenv("GOOGLE_API_KEY"),
+    os.getenv("GOOGLE_API_KEY_2"),
+    os.getenv("GOOGLE_API_KEY_3"),
+]
+
+key_cycle = itertools.cycle(API_KEYS)
+
+
+def get_llm():
+    """Return a ChatGoogleGenerativeAI instance with a rotated API key."""
+    key = next(key_cycle)
+    return ChatGoogleGenerativeAI(
+        google_api_key=key,
+        model="gemini-2.0-flash",
+        temperature=0,
+        max_output_tokens=8192,
+        max_tokens=None,
+        timeout=None,
+        max_retries=2,
+    )
 
 
 def get_tools(project_id: str):
@@ -63,15 +90,6 @@ def get_tools(project_id: str):
     return [list_project_structure, read_file, write_file]
 
 
-llm = ChatGoogleGenerativeAI(
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-2.0-flash",
-    temperature=0,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2,
-)
-
 fallback_pages = [
     {
         "name": "index",
@@ -107,7 +125,7 @@ def identify_website_pages(description: str, mvp: str = "") -> List[Dict[str, st
     Return ONLY a JSON array of objects with this structure:
     [
         {{
-            "name": "index",
+            "name": "index", 
             "description": "Landing/home page that serves as the main entry point and introduces the application to visitors",
             "content": "Hero section with compelling headline and app description, navigation menu with links to all main pages, call-to-action buttons for primary actions (login/register/get-started), feature highlights or benefits section, testimonials or social proof if applicable, footer with contact info and links",
         }},
@@ -119,8 +137,9 @@ def identify_website_pages(description: str, mvp: str = "") -> List[Dict[str, st
     ]
     
     Be comprehensive but try to summarize the user journey in max 5 to 6 pages. Include only essential pages for the MVP functionality.
-    Consider pages like: landing/home, authentication (login/register), main application pages, user profile/settings if needed.
+    Consider pages like: landing/home (index.html is the mandatory entry point not base.html or home.html), authentication (login/register), main application pages, user profile/settings if needed.
     """
+    llm = get_llm()
 
     response = llm.predict(page_identification_prompt)
 
@@ -175,6 +194,7 @@ def get_relevant_images(description: str) -> Dict[str, List[str]]:
         "Return them as a JSON list of strings without any extra text.\n\n"
         f"Description:\n{description}"
     )
+    llm = get_llm()
 
     response = llm.predict(prompt)
     keywords_text = response.strip()
@@ -208,6 +228,29 @@ def get_relevant_images(description: str) -> Dict[str, List[str]]:
         raise RuntimeError(f"Image service request failed: {e}")
 
     return data
+
+
+def find_matching_image(media_path: str, html_filename: str) -> str | None:
+    """Check if there's an image with the same base name as the HTML file."""
+    base_name = os.path.splitext(html_filename)[0]
+    if not os.path.exists(media_path):
+        return None
+
+    for ext in [".png", ".jpg", ".jpeg", ".webp"]:
+        possible_path = os.path.join(media_path, base_name + ext)
+        if os.path.exists(possible_path):
+            return possible_path
+    return None
+
+
+def write_html_file(base_path: str, filename: str, html_content: str):
+    """Writes HTML file to disk, ensuring valid HTML structure."""
+    if "<html" not in html_content.lower():
+        print(f"   ⚠️ Warning: {filename} does not contain valid HTML structure.")
+    file_path = os.path.join(base_path, filename)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"   ✅ Created {filename} ({len(html_content)} chars)")
 
 
 def generate_frontend_prompts(
@@ -269,6 +312,7 @@ def generate_frontend_prompts(
         - Use images from the list below when designing sections:
         {visual_assets_context}
         - Optimize layout to visually balance text and imagery.
+        - Give images width and height to avoid unexpected spillage
         - Use Font Awesome (Free) icons via CDN:
           <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
         - Integrate icons for buttons, navigation, features, and section headings where appropriate.
@@ -291,10 +335,9 @@ def generate_frontend_prompts(
         {other_pages_context}
 
         TECHNICAL REQUIREMENTS:
-        - Use semantic HTML5 structure with proper tags (header, nav, main, section, article, aside, footer)
         - Use tailwind CDN for for modern and professional styling, and internal CSS if required for complex styling
         - Include internal <script> tags for functionalities and interactivity.
-        - Use meaningful id and class attributes following BEM methodology where appropriate
+        - Use meaningful id and class attributes where needed
         - Implement responsive design with mobile-first approach using CSS Grid and Flexbox
         - Include proper navigation menu that links to other pages in the website
         - Follow the design guideline for colors and typography
@@ -331,17 +374,18 @@ def generate_frontend_prompts(
 #     return processed
 
 
-async def generate_frontend(prompts: List[str], project_id: str, app_type="vanilla"):
+async def generate_frontend(prompts: List[str], chat_id: str, app_type="vanilla"):
     """Generate frontend pages step by step with context of previously generated files."""
     await TerminalLogger.log(
-        "info", "development", f"Starting development for project-{project_id}"
+        "info", "development", f"Starting development for project-{chat_id}"
     )
     await asyncio.sleep(2)
 
     # Create project directory
     base_path = os.path.abspath(
-        os.path.join(".", f"code-environment/project-{project_id}")
+        os.path.join(".", f"code-environment/project-{chat_id}")
     )
+    media_path = os.path.abspath(os.path.join("media", str(chat_id)))
     os.makedirs(base_path, exist_ok=True)
     print(f"📁 Created project directory: {base_path}")
 
@@ -349,49 +393,34 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
         REACT_SYSTEM_PROMPT if app_type == "react" else FRONTEND_SYSTEM_PROMPT
     )
 
-    generated_files = []
     total_pages = len(prompts)
 
     for i, user_request in enumerate(prompts, 1):
         print(f"\n🔄 Generating page {i}/{total_pages}...")
-        time.sleep(1)
 
-        # Add context of previously generated files
-        context_info = ""
-        if generated_files:
-            context_info = "\n\nPREVIOUSLY GENERATED FILE FOR REFERENCE:\n"
-            file_info = generated_files[0]
-            context_info += f"\n--- {file_info['filename']} ---\n"
-            # Include first 800 chars to provide context without overwhelming the prompt
-            content_preview = (
-                file_info["content"][:1600] + "..."
-                if len(file_info["content"]) > 1600
-                else file_info["content"]
-            )
-            context_info += content_preview
-            context_info += "\n"
+        filename = extract_filename(user_request)
+        if not filename:
+            print("   ❌ Could not extract filename from prompt.")
+            continue
+
+        print(f"   📄 Generating: {filename}")
+        image_path = find_matching_image(media_path, filename)
 
         # Create the full prompt with system instructions
-        full_prompt = f"{system_prompt}\n\nUser Request:\n{user_request}{context_info}"
+        full_prompt = f"{system_prompt}\n\nUser Request:\n{user_request}"
 
         try:
-            response = llm.invoke(full_prompt)
-
-            # Extract filename from the request
-            import re
-
-            filename_match = re.search(r"(\w+(?:-\w+)*)\.html", user_request)
-            if filename_match:
-                filename = filename_match.group(0)
-                print(f"   📄 Generating {filename}...")
-
-                # Extract HTML content from response
-                if hasattr(response, "content"):
-                    html_content = response.content
-                elif hasattr(response, "text"):
-                    html_content = response.text
-                else:
-                    html_content = str(response)
+            llm = get_llm()
+            if image_path:
+                print(
+                    f"   🖼️ Found image match for {filename}: {os.path.basename(image_path)}"
+                )
+                html_content = generate_ui_from_image(full_prompt, image_path)
+            else:
+                response = llm.invoke(full_prompt)
+                html_content = getattr(response, "content", None) or getattr(
+                    response, "text", str(response)
+                )
 
                 # Look for HTML content in the response
                 if "<!DOCTYPE html>" in html_content or "<html" in html_content:
@@ -419,35 +448,22 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
                         print(
                             f"   ✅ Successfully created {filename} ({len(processed_html)} characters)"
                         )
-
-                        # Store for context (limit content size for memory efficiency)
-                        stored_content = (
-                            processed_html[:1600]
-                            if len(processed_html) > 1600
-                            else processed_html
-                        )
-                        generated_files.append(
-                            {"filename": filename, "content": stored_content}
-                        )
                     else:
                         print(f"   ❌ No HTML content found in response for {filename}")
                         print(f"   Response preview: {html_content[:200]}...")
                 else:
                     print(f"   ❌ No HTML structure found in response for {filename}")
                     print(f"   Response preview: {html_content[:200]}...")
-            else:
-                print("   ❌ Could not extract filename from request")
-                print(f"   Request preview: {user_request[:100]}...")
 
         except Exception as e:
             print(f"   ❌ Error generating content: {e}")
             continue
 
-    print(f"\n🎉 Generated {len(generated_files)} pages successfully!")
+    print(f"\n🎉 Generated all pages successfully!")
     await TerminalLogger.log(
         "success",
         "development",
-        f"Development completed! Generated {len(generated_files)} pages.",
+        f"Development completed! Generated all pages.",
     )
 
 
@@ -484,6 +500,7 @@ def structure_react_requests(
     
     Be comprehensive but realistic. Focus on essential components for the MVP.
     """
+    llm = get_llm()
 
     response = llm.predict(components_identification_prompt)
 
@@ -674,6 +691,7 @@ async def generate_react_frontend(prompts: List[str], project_id: str):
 
         # Use direct LLM call
         try:
+            llm = get_llm()
             response = llm.invoke(full_prompt)
 
             # Extract component names from the request

@@ -3,7 +3,7 @@ import Navbar from "../components/commons/Navbar";
 import Main from "../pages/Main";
 import Login from "../components/Login/Login";
 import Register from "../components/Register/Register";
-import NewProject from "../pages/NewProject";
+import NewProject from "../pages/NewProjectPage";
 import ProtectedRoute from "./ProtectedRoutes";
 
 const AppRoutes = () => {

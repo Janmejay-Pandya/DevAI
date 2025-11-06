@@ -11,7 +11,7 @@ class AgentSteps(models.TextChoices):
     TECH_STACK = "tech_stack", "Tech Stack Recommendation"
     DEVELOPMENT = "development", "Development"
     TESTING = "test", "Testing"
-    DEPLOYMENT = "deploy", "Deployment"
+    DEPLOYMENT = "deployment", "Deployment"
     COMPLETE = "complete", "Completed"
 
 

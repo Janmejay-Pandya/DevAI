@@ -131,7 +131,7 @@ INTENT CATEGORIES:
 - "describe_product": User provides details or new information about their project. If its a description filter out unnecessary words. For Example Turn 'Hi, I want to make a note taking app' into 'a note taking app'
 - "question": User is asking something. You should rephrase their question clearly.
 - "go_back": User wants to return to a previous project stage. The valid stages are:
-  ["generate_mvp", "debate", "finalize_mvp", "design", "tech_stack", "development", "test", "deploy"]
+  ["generate_mvp", "debate", "finalize_mvp", "design", "tech_stack", "development", "test", "deployment"]
 - "incomplete": The message is off-topic, irrelevant (e.g. "who is the president of USA"), or doesn't contain any usable input.
 
 EXPECTED OUTPUT (in JSON):
@@ -277,28 +277,15 @@ Do not define NotesHistory or TextInput here; we will define them separately.
 """
 
 UI_DESIGNER_PROMPT = """
-You are an expert front-end developer and UI/UX designer.
+You are also given a freehand rough sketch of a user interface drawn on a canvas or whiteboard. Your task is to analyze the layout and try to design in a similar layout.
 
-You are given a freehand rough sketch of a user interface drawn on a canvas or whiteboard. Your task is to analyze the layout and convert it into **complete HTML** with **Tailwind CSS**.
-
-Your goal is to preserve the **layout structure** shown in the sketch while enhancing the **appearance** with clean, modern UI elements.
+Your goal is to preserve the **layout structure** shown in the sketch while enhancing the **appearance** with clean, modern UI elements. User will only give only prominent features in sketch, rest you have to improvise according to the content.
 
 ---
 
-Instructions:
-
-- Output a **complete HTML document**, including `<html>`, `<head>`, and `<body>` tags.
-- Use **Tailwind CSS via CDN** in the `<head>` for styling.
+Sketch based instructions:
 - Ensure layout and structure closely follow the sketch.
 - Use logical assumptions where elements are ambiguous, but avoid hallucinations.
-- Include appropriate spacing, alignment, widths, and heights based on sketch proportions.
-- Be creative in refining the **visual appearance** (e.g., cards, buttons, headers) using Tailwind.
-- For image placeholders (typically represented by a box with an "X"), use:
-  ```html
-  <img src="default.jpg" alt="placeholder" class="w-[200px] h-[150px] object-cover border rounded" />
-  ```
+- images are typically represented by a box with an "X".
 - Use placeholder text like "Title", "Username", "Enter email", etc., where relevant.
-- Maintain good semantics: use <section>, <header>, <form>, <button>, etc., properly.
-- All styling should be done via Tailwind utility classes; no custom CSS.
-- Do not include markdown, explanation, or commentary — just the raw HTML.
 """
