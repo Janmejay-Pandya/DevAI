@@ -1,12 +1,16 @@
 import { useRef, useEffect, useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { setPages } from "../../store/slices/projectSlice";
+import api from "../../api";
 import PropTypes from "prop-types";
 
-export default function SketchCanvas({ open, onClose }) {
+export default function SketchCanvas({ open, onClose, fileName }) {
   const canvasRef = useRef(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [ctx, setCtx] = useState(null);
-  const [previewHtml, setPreviewHtml] = useState("");
-  const [activeTab, setActiveTab] = useState("draw");
+  const currentChatId = useSelector((state) => state.chat.currentChatId);
+  const pages = useSelector((state) => state.project.pages);
+  const dispatch = useDispatch();
 
   // Initialize and keep canvas sized to its parent (modal content)
   useEffect(() => {
@@ -71,20 +75,24 @@ export default function SketchCanvas({ open, onClose }) {
     const imageData = offscreenCanvas.toDataURL("image/png");
 
     try {
-      const res = await fetch("http://localhost:8000/api/upload-sketch/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ image: imageData }),
+      const uploadRes = await api.post("/api/upload-sketch/", {
+        image: imageData,
+        chat_id: currentChatId,
+        file_name: fileName,
       });
 
-      const data = await res.json();
-      console.log("LLM Response:", data);
-      if (data && typeof data.llm_output === "string" && data.llm_output.trim().length > 0) {
-        setPreviewHtml(data.llm_output);
-        setActiveTab("preview");
-      }
+      const designPath = uploadRes.data.filepath;
+      console.log("Response:", designPath);
+
+      // Create updated pages array
+      const updatedPages = pages.map((page) =>
+        page.name === fileName ? { ...page, design: designPath } : page,
+      );
+
+      await api.put(`/api/project/update-development-pages/${currentChatId}/`, updatedPages);
+
+      dispatch(setPages(updatedPages));
+      onClose();
     } catch (err) {
       console.error("Error uploading image:", err);
     }
@@ -120,19 +128,7 @@ export default function SketchCanvas({ open, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-3 left-3 flex gap-2 z-10">
-          <button
-            className={`px-3 py-1.5 rounded shadow border ${activeTab === "draw" ? "bg-gray-800 text-white" : "bg-white"}`}
-            onClick={() => setActiveTab("draw")}
-          >
-            Draw
-          </button>
-          <button
-            className={`px-3 py-1.5 rounded shadow border ${activeTab === "preview" ? "bg-gray-800 text-white" : "bg-white"}`}
-            onClick={() => setActiveTab("preview")}
-            disabled={!previewHtml}
-          >
-            Preview
-          </button>
+          <div className="px-3 py-1.5 rounded shadow border bg-gray-800 text-white">Draw Here</div>
         </div>
         <div className="absolute top-3 right-3 flex gap-2 z-10">
           <button onClick={clearCanvas} className="bg-white border px-3 py-1.5 rounded shadow">
@@ -148,28 +144,17 @@ export default function SketchCanvas({ open, onClose }) {
             Close
           </button>
         </div>
-        {activeTab === "draw" && (
-          <div className="absolute inset-0">
-            <canvas
-              ref={canvasRef}
-              className="w-full h-full cursor-crosshair"
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-            />
-          </div>
-        )}
-        {activeTab === "preview" && (
-          <div className="absolute inset-0 bg-white">
-            <iframe
-              title="Sketch Preview"
-              className="w-full h-full"
-              sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
-              srcDoc={previewHtml}
-            />
-          </div>
-        )}
+
+        <div className="absolute inset-0">
+          <canvas
+            ref={canvasRef}
+            className="w-full h-full cursor-crosshair"
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+          />
+        </div>
       </div>
     </div>
   );
@@ -178,4 +163,5 @@ export default function SketchCanvas({ open, onClose }) {
 SketchCanvas.propTypes = {
   open: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
+  fileName: PropTypes.string.isRequired,
 };

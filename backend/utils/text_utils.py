@@ -2,6 +2,12 @@ import re
 import json
 
 
+def extract_filename(prompt: str) -> str:
+    """Extract the HTML filename from the prompt text."""
+    match = re.search(r"(\w+(?:-\w+)*)\.html", prompt)
+    return match.group(0) if match else None
+
+
 def extract_json_from_text(text):
     code_block_pattern = r"```(?:json)?(.*?)```"
     code_blocks = re.findall(code_block_pattern, text, re.DOTALL)

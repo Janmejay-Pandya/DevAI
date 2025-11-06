@@ -14,6 +14,5 @@ urlpatterns = [
     path("api/token/refresh/", TokenRefreshView.as_view(), name="refresh"),
     path("api-auth/", include("rest_framework.urls")),
     path("api/project/", include("projects.urls")),
-    path("api/", include("designer.urls")),  # sh
     path("api/", include("sketch2code.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

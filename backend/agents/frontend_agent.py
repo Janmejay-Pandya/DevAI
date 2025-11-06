@@ -1,16 +1,47 @@
 """Frontend agent for generating multi-step website pages with proper structure and references."""
 
 import os
+import re
 import time
+import json
 import asyncio
+import requests
+import itertools
 from typing import List, Dict
 from langchain_core.tools import tool
+from langchain.schema import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv, find_dotenv
+from agents.designer_agent import generate_ui_from_image
+from utils.text_utils import extract_filename
 from utils.terminal_utils import TerminalLogger
 from .prompts import FRONTEND_SYSTEM_PROMPT, REACT_SYSTEM_PROMPT
 
+
 load_dotenv(find_dotenv(), override=True)
+
+# List of keys
+API_KEYS = [
+    os.getenv("GOOGLE_API_KEY"),
+    os.getenv("GOOGLE_API_KEY_2"),
+    os.getenv("GOOGLE_API_KEY_3"),
+]
+
+key_cycle = itertools.cycle(API_KEYS)
+
+
+def get_llm():
+    """Return a ChatGoogleGenerativeAI instance with a rotated API key."""
+    key = next(key_cycle)
+    return ChatGoogleGenerativeAI(
+        google_api_key=key,
+        model="gemini-2.0-flash",
+        temperature=0,
+        max_output_tokens=8192,
+        max_tokens=None,
+        timeout=None,
+        max_retries=2,
+    )
 
 
 def get_tools(project_id: str):
@@ -59,79 +90,60 @@ def get_tools(project_id: str):
     return [list_project_structure, read_file, write_file]
 
 
-llm = ChatGoogleGenerativeAI(
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
-    temperature=0,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2,
-)
-
 fallback_pages = [
     {
         "name": "index",
         "description": "Landing/home page that serves as the main entry point and introduces the application to visitors",
         "content": "Hero section with compelling headline and app description, navigation menu with links to all main pages, call-to-action buttons for primary actions, feature highlights or benefits section, footer with contact info and links",
-        "special_notes": "Should be optimized for conversions and clearly communicate the value proposition",
     },
     {
         "name": "login",
         "description": "User authentication page for existing users to access their accounts",
         "content": "Login form with email/username and password fields, remember me checkbox, forgot password link, link to register page for new users, form validation with error messages, loading states for form submission",
-        "special_notes": "Include proper form validation and security considerations, redirect logic after successful login",
     },
     {
         "name": "register",
         "description": "User registration page for new users to create accounts",
         "content": "Registration form with required fields (name, email, password, confirm password), validation with real-time feedback, terms and conditions acceptance, link to login page for existing users, success confirmation",
-        "special_notes": "Include strong password requirements and clear validation feedback",
     },
 ]
 
 
-def identify_website_pages(
-    description: str, mvp: str = "", design_guidelines: str = ""
-) -> List[Dict[str, str]]:
+def identify_website_pages(description: str, mvp: str = "") -> List[Dict[str, str]]:
     """Identify all pages needed for the website with detailed descriptions."""
     page_identification_prompt = f"""
-    Based on the following project description, identify ALL pages that this website should contain.
+    Based on the following project description, identify the pages that this website should contain.
     
     Project Description: {description.strip()}
     MVP Features: {mvp.strip()}
-    Design Guidelines: {design_guidelines.strip()}
     
-    Analyze the project requirements and think about the complete user journey. For each page, provide:
+    Analyze the project requirements and think about the user journey. For each page, provide:
     1. The page name (without .html extension, use lowercase with hyphens for multi-word names)
     2. A clear description of what this page is for and its purpose in the user journey
     3. Detailed list of specific elements, sections, and functionality that should be included
-    4. Any special considerations for this page (forms, interactivity, data display, etc.)
     
     Return ONLY a JSON array of objects with this structure:
     [
         {{
-            "name": "index",
+            "name": "index", 
             "description": "Landing/home page that serves as the main entry point and introduces the application to visitors",
             "content": "Hero section with compelling headline and app description, navigation menu with links to all main pages, call-to-action buttons for primary actions (login/register/get-started), feature highlights or benefits section, testimonials or social proof if applicable, footer with contact info and links",
-            "special_notes": "Should be optimized for conversions and clearly communicate the value proposition"
         }},
         {{
             "name": "login", 
             "description": "User authentication page for existing users to access their accounts",
             "content": "Login form with email/username and password fields, remember me checkbox, forgot password link, link to register page for new users, form validation with error messages, loading states for form submission",
-            "special_notes": "Include proper form validation and security considerations, redirect logic after successful login"
         }}
     ]
     
-    Be comprehensive and think about the complete user experience. Include all essential pages for the MVP functionality.
-    Consider pages like: landing/home, authentication (login/register), main application pages, user profile/settings, help/support, legal pages if needed.
+    Be comprehensive but try to summarize the user journey in max 5 to 6 pages. Include only essential pages for the MVP functionality.
+    Consider pages like: landing/home (index.html is the mandatory entry point not base.html or home.html), authentication (login/register), main application pages, user profile/settings if needed.
     """
+    llm = get_llm()
 
     response = llm.predict(page_identification_prompt)
 
     try:
-        import json
-
         # Find JSON array in response
         start = response.find("[")
         end = response.rfind("]") + 1
@@ -168,12 +180,99 @@ def identify_website_pages(
         return fallback_pages
 
 
-def structure_frontend_requests(
-    description: str, mvp: str = "", design_guidelines: str = ""
+def get_relevant_images(description: str) -> Dict[str, List[str]]:
+    """
+    Extracts 3 relevant keywords from a description using a Gemini model,
+    fetches related images from the local FastAPI image service,
+    and returns them grouped by tag.
+    """
+
+    # Ask LLM to extract 3 keywords
+    prompt = (
+        "Extract exactly 3 short, distinct keywords that best represent visual "
+        "themes for the following website description. "
+        "Return them as a JSON list of strings without any extra text.\n\n"
+        f"Description:\n{description}"
+    )
+    llm = get_llm()
+
+    response = llm.predict(prompt)
+    keywords_text = response.strip()
+
+    # Parse output safely
+    try:
+        start = keywords_text.find("[")
+        end = keywords_text.rfind("]") + 1
+        if start != -1 and end != 0:
+            keywords_text = keywords_text[start:end]
+
+        tags = json.loads(keywords_text)
+        if not isinstance(tags, list):
+            raise ValueError
+
+    except Exception:
+        # Fallback: split by comma if model didn’t return JSON
+        tags = [word.strip() for word in keywords_text.split(",") if word.strip()]
+
+    if len(tags) == 0:
+        tags = ["abstract"]
+
+    # Call local image service
+    try:
+        res = requests.post(
+            "http://localhost:8001/get_images", json={"tags": tags}, timeout=20
+        )
+        res.raise_for_status()
+        data = res.json()
+    except Exception as e:
+        raise RuntimeError(f"Image service request failed: {e}")
+
+    return data
+
+
+def find_matching_image(media_path: str, html_filename: str) -> str | None:
+    """Check if there's an image with the same base name as the HTML file."""
+    base_name = os.path.splitext(html_filename)[0]
+    if not os.path.exists(media_path):
+        return None
+
+    for ext in [".png", ".jpg", ".jpeg", ".webp"]:
+        possible_path = os.path.join(media_path, base_name + ext)
+        if os.path.exists(possible_path):
+            return possible_path
+    return None
+
+
+def write_html_file(base_path: str, filename: str, html_content: str):
+    """Writes HTML file to disk, ensuring valid HTML structure."""
+    if "<html" not in html_content.lower():
+        print(f"   ⚠️ Warning: {filename} does not contain valid HTML structure.")
+    file_path = os.path.join(base_path, filename)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+    print(f"   ✅ Created {filename} ({len(html_content)} chars)")
+
+
+def generate_frontend_prompts(
+    description: str, pages: List[dict], mvp: str = "", design_guidelines: str = ""
 ) -> List[str]:
     """Structure frontend requests into step-by-step page generation prompts."""
-    # First identify all pages needed
-    pages = identify_website_pages(description, mvp, design_guidelines)
+    try:
+        image_data = get_relevant_images(description)
+    except Exception as e:
+        print(f"[Warning] Could not fetch images: {e}")
+        image_data = {}
+
+    # Flatten image URLs
+    all_image_urls = []
+    for tag, urls in image_data.items():
+        all_image_urls.extend(urls)
+
+    visual_assets_context = (
+        "AVAILABLE IMAGE ASSETS:\n" + "\n".join(all_image_urls)
+        if all_image_urls
+        else "No image assets available; use generic placeholders."
+    )
 
     prompts = []
 
@@ -181,20 +280,12 @@ def structure_frontend_requests(
         page_name = page_info["name"]
         page_description = page_info["description"]
         page_content = page_info["content"]
-        special_notes = page_info.get("special_notes", "")
 
         # Create context about other pages for proper linking
         other_pages = [p["name"] for p in pages if p["name"] != page_name]
         other_pages_context = (
             f"Other pages in this website: {', '.join(other_pages)}.html"
         )
-
-        # Create context about previously generated pages
-        if i > 0:
-            previous_pages = [p["name"] for p in pages[:i]]
-            previous_context = f"Previously generated pages: {', '.join(previous_pages)}.html - ensure consistent styling, navigation, and branding across all pages."
-        else:
-            previous_context = "This is the first page being generated - establish the design foundation and styling that other pages will follow."
 
         # Add special instructions based on page type
         page_specific_instructions = ""
@@ -207,59 +298,58 @@ def structure_frontend_requests(
         FORM-SPECIFIC REQUIREMENTS:
         - Include proper form validation with JavaScript
         - Add loading states and success/error messages
-        - Use proper input types and validation attributes
-        - Include CSRF protection considerations in form structure
-        - Add proper labels and accessibility attributes
+        - Use appropriate input types and validation attributes
         """
         elif "index" in page_name.lower() or "home" in page_name.lower():
             page_specific_instructions = """
         LANDING PAGE REQUIREMENTS:
-        - Create an engaging hero section that captures attention
-        - Include clear call-to-action buttons with proper styling
-        - Ensure the page loads quickly and looks professional
-        - Add smooth scrolling and subtle animations if appropriate
+        - Engaging hero section that captures attention
+        - Clear call-to-action buttons
+        """
+        visual_and_icon_guidelines = f"""
+        VISUAL ENHANCEMENT REQUIREMENTS:
+        - Use plenty of relevant images and icons for better aesthetics and communication.
+        - Use images from the list below when designing sections:
+        {visual_assets_context}
+        - Optimize layout to visually balance text and imagery.
+        - Give images width and height to avoid unexpected spillage
+        - Use Font Awesome (Free) icons via CDN:
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+        - Integrate icons for buttons, navigation, features, and section headings where appropriate.
         """
 
         prompt = f"""
         Create a complete {page_name}.html file for the following project:
-        
+
         PROJECT CONTEXT:
         Description: {description.strip()}
         MVP Features: {mvp.strip()}
         Design Guidelines: {design_guidelines.strip()}
-        
+
         PAGE SPECIFIC DETAILS:
         Page Name: {page_name}.html
         Page Purpose: {page_description}
         Required Content/Elements: {page_content}
-        Special Considerations: {special_notes}
-        
+
         WEBSITE STRUCTURE:
         {other_pages_context}
-        {previous_context}
-        
+
         TECHNICAL REQUIREMENTS:
-        - Use semantic HTML5 structure with proper tags (header, nav, main, section, article, aside, footer)
-        - Add comprehensive internal <style> tags with modern, professional CSS
-        - Include internal <script> tags for interactivity and user experience enhancements
-        - Use meaningful id and class attributes following BEM methodology where appropriate
+        - Use tailwind CDN for for modern and professional styling, and internal CSS if required for complex styling
+        - Include internal <script> tags for functionalities and interactivity.
+        - Use meaningful id and class attributes where needed
         - Implement responsive design with mobile-first approach using CSS Grid and Flexbox
         - Include proper navigation menu that links to other pages in the website
-        - Ensure consistent design language, color scheme, and typography across the site
-        - Add proper form validation and user feedback if the page contains forms
-        - Follow accessibility best practices (ARIA labels, semantic HTML, keyboard navigation)
-        - Include meta tags for SEO and social sharing
-        - Add loading states and micro-interactions for better user experience
-        
+        - Follow the design guideline for colors and typography
+
         {page_specific_instructions}
-        
+        {visual_and_icon_guidelines}
+
         CRITICAL IMPLEMENTATION NOTES:
         - MANDATORY: Include ALL the required content/elements specified above for this specific page
-        - The HTML should be complete and self-contained with all styles and scripts inline
-        - Ensure proper indentation and clean, readable code structure
-        - Test that all interactive elements work properly
-        - **IMPORTANT**: Generate clean HTML without any escape characters or literal newlines
-        
+        - The HTML should be complete and self-contained
+        - **IMPORTANT**: Generate clean HTML without any html escape characters (like &quot;) or literal newlines.
+
         Generate the complete HTML file content and return it as clean, properly formatted HTML.
         """
 
@@ -268,33 +358,34 @@ def structure_frontend_requests(
     return prompts
 
 
-def clean_html_content(raw_content: str) -> str:
-    """Clean and process HTML content to remove escape characters and ensure proper formatting."""
-    # Replace literal \n with actual newlines
-    processed = raw_content.replace("\\n", "\n")
-    # Replace literal \t with actual tabs
-    processed = processed.replace("\\t", "\t")
-    # Replace literal \r with actual carriage returns
-    processed = processed.replace("\\r", "\r")
-    # Remove any extra quotes that might wrap the content
-    processed = processed.strip("\"'")
-    # Remove any leading/trailing whitespace
-    processed = processed.strip()
+# def clean_html_content(raw_content: str) -> str:
+#     """Clean and process HTML content to remove escape characters and ensure proper formatting."""
+#     # Replace literal \n with actual newlines
+#     processed = raw_content.replace("\\n", "\n")
+#     # Replace literal \t with actual tabs
+#     processed = processed.replace("\\t", "\t")
+#     # Replace literal \r with actual carriage returns
+#     processed = processed.replace("\\r", "\r")
+#     # Remove any extra quotes that might wrap the content
+#     processed = processed.strip("\"'")
+#     # Remove any leading/trailing whitespace
+#     processed = processed.strip()
 
-    return processed
+#     return processed
 
 
-async def generate_frontend(prompts: List[str], project_id: str, app_type="vanilla"):
+async def generate_frontend(prompts: List[str], chat_id: str, app_type="vanilla"):
     """Generate frontend pages step by step with context of previously generated files."""
     await TerminalLogger.log(
-        "info", "development", f"Starting development for project-{project_id}"
+        "info", "development", f"Starting development for project-{chat_id}"
     )
     await asyncio.sleep(2)
 
     # Create project directory
     base_path = os.path.abspath(
-        os.path.join(".", f"code-environment/project-{project_id}")
+        os.path.join(".", f"code-environment/project-{chat_id}")
     )
+    media_path = os.path.abspath(os.path.join("media", str(chat_id)))
     os.makedirs(base_path, exist_ok=True)
     print(f"📁 Created project directory: {base_path}")
 
@@ -302,49 +393,34 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
         REACT_SYSTEM_PROMPT if app_type == "react" else FRONTEND_SYSTEM_PROMPT
     )
 
-    generated_files = []
     total_pages = len(prompts)
 
     for i, user_request in enumerate(prompts, 1):
         print(f"\n🔄 Generating page {i}/{total_pages}...")
-        time.sleep(1)
 
-        # Add context of previously generated files
-        context_info = ""
-        if generated_files:
-            context_info = "\n\nPREVIOUSLY GENERATED FILES FOR REFERENCE:\n"
-            for file_info in generated_files:
-                context_info += f"\n--- {file_info['filename']} ---\n"
-                # Include first 800 chars to provide context without overwhelming the prompt
-                content_preview = (
-                    file_info["content"][:800] + "..."
-                    if len(file_info["content"]) > 800
-                    else file_info["content"]
-                )
-                context_info += content_preview
-                context_info += "\n"
+        filename = extract_filename(user_request)
+        if not filename:
+            print("   ❌ Could not extract filename from prompt.")
+            continue
+
+        print(f"   📄 Generating: {filename}")
+        image_path = find_matching_image(media_path, filename)
 
         # Create the full prompt with system instructions
-        full_prompt = f"{system_prompt}\n\nUser Request:\n{user_request}{context_info}"
+        full_prompt = f"{system_prompt}\n\nUser Request:\n{user_request}"
 
         try:
-            response = llm.invoke(full_prompt)
-
-            # Extract filename from the request
-            import re
-
-            filename_match = re.search(r"(\w+(?:-\w+)*)\.html", user_request)
-            if filename_match:
-                filename = filename_match.group(0)
-                print(f"   📄 Generating {filename}...")
-
-                # Extract HTML content from response
-                if hasattr(response, "content"):
-                    html_content = response.content
-                elif hasattr(response, "text"):
-                    html_content = response.text
-                else:
-                    html_content = str(response)
+            llm = get_llm()
+            if image_path:
+                print(
+                    f"   🖼️ Found image match for {filename}: {os.path.basename(image_path)}"
+                )
+                html_content = generate_ui_from_image(full_prompt, image_path)
+            else:
+                response = llm.invoke(full_prompt)
+                html_content = getattr(response, "content", None) or getattr(
+                    response, "text", str(response)
+                )
 
                 # Look for HTML content in the response
                 if "<!DOCTYPE html>" in html_content or "<html" in html_content:
@@ -362,7 +438,7 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
                             actual_html = html_content[start_idx:]
 
                         # Clean the HTML content
-                        processed_html = clean_html_content(actual_html)
+                        processed_html = actual_html
 
                         # Write the file
                         file_path = os.path.join(base_path, filename)
@@ -372,35 +448,22 @@ async def generate_frontend(prompts: List[str], project_id: str, app_type="vanil
                         print(
                             f"   ✅ Successfully created {filename} ({len(processed_html)} characters)"
                         )
-
-                        # Store for context (limit content size for memory efficiency)
-                        stored_content = (
-                            processed_html[:1500]
-                            if len(processed_html) > 1500
-                            else processed_html
-                        )
-                        generated_files.append(
-                            {"filename": filename, "content": stored_content}
-                        )
                     else:
                         print(f"   ❌ No HTML content found in response for {filename}")
                         print(f"   Response preview: {html_content[:200]}...")
                 else:
                     print(f"   ❌ No HTML structure found in response for {filename}")
                     print(f"   Response preview: {html_content[:200]}...")
-            else:
-                print("   ❌ Could not extract filename from request")
-                print(f"   Request preview: {user_request[:100]}...")
 
         except Exception as e:
             print(f"   ❌ Error generating content: {e}")
             continue
 
-    print(f"\n🎉 Generated {len(generated_files)} pages successfully!")
+    print(f"\n🎉 Generated all pages successfully!")
     await TerminalLogger.log(
         "success",
         "development",
-        f"Development completed! Generated {len(generated_files)} pages.",
+        f"Development completed! Generated all pages.",
     )
 
 
@@ -437,6 +500,7 @@ def structure_react_requests(
     
     Be comprehensive but realistic. Focus on essential components for the MVP.
     """
+    llm = get_llm()
 
     response = llm.predict(components_identification_prompt)
 
@@ -627,6 +691,7 @@ async def generate_react_frontend(prompts: List[str], project_id: str):
 
         # Use direct LLM call
         try:
+            llm = get_llm()
             response = llm.invoke(full_prompt)
 
             # Extract component names from the request

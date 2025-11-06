@@ -34,7 +34,6 @@ INSTALLED_APPS = [
     "projects",
     "users",
     "chat",
-    "designer"
 ]
 
 REST_FRAMEWORK = {

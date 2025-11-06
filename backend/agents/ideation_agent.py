@@ -1,116 +1,62 @@
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv, find_dotenv
-from langchain.prompts import (
-    ChatPromptTemplate,
-    SystemMessagePromptTemplate,
-    HumanMessagePromptTemplate,
-)
-from langchain.prompts.chat import MessagesPlaceholder
-from langchain.schema import SystemMessage, HumanMessage
-from langchain.agents import initialize_agent, AgentType
-from langchain.tools import Tool
-from langchain.memory import ConversationBufferMemory
+
 
 load_dotenv(find_dotenv(), override=True)
 
 # Initialize multiple LLMs for debate
 llm_mvp_generator = ChatGoogleGenerativeAI(
     google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     temperature=0.7,
-)
-llm_minimalist = ChatGoogleGenerativeAI(
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
-    temperature=0.8,
-)
-llm_scalability_advocate = ChatGoogleGenerativeAI(
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
-    temperature=0.8,
-)
-llm_ux_focus = ChatGoogleGenerativeAI(
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
-    temperature=0.8,
-)
-llm_final_decision = ChatGoogleGenerativeAI(
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
-    temperature=0.6,
 )
 llm_design_brainstorm = ChatGoogleGenerativeAI(
     google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     temperature=0.6,
 )
 llm_techstack_decider = ChatGoogleGenerativeAI(
     google_api_key=os.getenv("GOOGLE_API_KEY"),
-    model="gemini-1.5-flash",
+    model="gemini-2.0-flash",
     temperature=0.7,
 )
 
-# Define system roles
-roles = {
-    "Minimalist": "Focus on only the core essential features needed for MVP.",
-    "Scalability Advocate": "Think about how features can be expanded in the future and balance feasibility.",
-    "UX Focus": "Prioritize user experience, ease of use, and modern design choices.",
-}
-
 
 # Generate Initial MVP Feature List
-def generate_mvp_features(product_description):
+def generate_mvp_features(product_description, changes):
     prompt = f"""
-    Given the product description: "{product_description}", generate an initial MVP feature list.
-    Focus only on essential features needed for a minimal but functional product.
+    Given the product description: "{product_description}",
+    generate a very minimal MVP feature list. 
+    Focus strictly on basic and essential features needed for a functional product.
+    Avoid advanced features like payment integrations, analytics, or third-party APIs.
+
     """
+    if changes:
+        prompt += (
+            f"\nConsider the previous MVP/features and user suggestions: {changes}"
+        )
+
     response = llm_mvp_generator.predict(prompt)
     return response
 
 
-# Debate on MVP features
-def debate_mvp_features(feature_list):
-    critiques = {}
-    for role, instruction in roles.items():
-        prompt = f"""
-        Given the MVP feature list:
-
-        {feature_list}
-
-        Provide your critique as a {role}. {instruction}
-        List any features that should be removed, added, or modified.
-        """
-        critiques[role] = globals()[f"llm_{role.lower().replace(' ', '_')}"].predict(
-            prompt
-        )
-
-    return critiques
-
-
-# Finalize MVP after debate
-def finalize_mvp(feature_list, critiques):
-    prompt = f"""
-    Given the initial MVP feature list:
-    {feature_list}
-    And the critiques from different perspectives:
-    {critiques}
-    Refine the MVP feature list by keeping only the most important suggestions.
-    For simplicity minimize as much complexity as possible and keep it restricted to frontend only features with no outside dependencies.
-    Output the final MVP features in a structured JSON format, as a list of string (functionalities).
-    """
-    final_mvp = llm_final_decision.predict(prompt)
-    return final_mvp
-
-
 # Brainstorm Design Guidelines
-def brainstorm_design_guidelines(product_description):
+def brainstorm_design_guidelines(product_description, changes=None):
     prompt = f"""
-    Given the product description: "{product_description}", suggest design guidelines and themes.
-    Include aspects like color palette, typography, and branding style.
-    Do not include any unnecessary details or features. Just focus on design.
-    Do not give multiple options for a particular aspect. Just be direct with your choice with a short explaination why.
+    Given the product description: "{product_description}", suggest clear and focused design guidelines and themes.
+    Focus only on design aspects like color palette and typography.
+
+    - Choose colors thoughtfully: if the design is dark-themed, suggest lighter, high-contrast colors for primary elements and text, and vice versa.
+    - Prioritize popular, visually appealing, and harmonious colors that suit the product's tone.
+    - Recommend typography that complements the theme and enhances readability.
+    - Be direct and specific: provide only one recommended color palette and one typography choice with a brief explanation for each.
+    - Avoid unnecessary details, multiple options, or unrelated suggestions.
     """
+
+    if changes:
+        prompt += f"\nIncorporate the following user suggestions or previous recommendations: {changes}"
+
     response = llm_design_brainstorm.predict(prompt)
     return response
 

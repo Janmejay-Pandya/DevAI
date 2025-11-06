@@ -54,6 +54,7 @@ const Main = () => {
             <iframe
               src="http://127.0.0.1:8080"
               title="Code Environment"
+              sandbox="allow-scripts allow-same-origin"
               className="w-full h-full border-none"
             />
           </div>
